@@ -4,10 +4,11 @@ L'applicazione usa per impostazione predefinita:
 
 - URL: `jdbc:mysql://localhost:3306/fantasy_f1`
 - utente: `root`
-- password: `Stellarium!23`
+- password vuota
 
-Le credenziali non vengono salvate nel repository. In PowerShell si impostano
-per la sessione corrente con:
+Se l'installazione locale di MySQL richiede una password o usa un altro utente,
+le credenziali vanno fornite senza salvarle nel repository. In PowerShell si
+impostano per la sessione corrente con:
 
 ```powershell
 $env:FANTASY_F1_DB_USER = "nome_utente"
@@ -20,10 +21,21 @@ Se necessario, anche l'URL puo essere sostituito:
 $env:FANTASY_F1_DB_URL = "jdbc:mysql://localhost:3306/fantasy_f1"
 ```
 
+Per creare e popolare il database, eseguire nell'ordine:
+
+1. `src/main/resources/db/schema.sql`
+2. `src/main/resources/db/seed.sql`
+
 Per verificare configurazione, credenziali e presenza del database:
 
 ```powershell
 .\gradlew.bat checkDatabaseConnection
+```
+
+Per avviare l'applicazione:
+
+```powershell
+.\gradlew.bat run
 ```
 
 Nel codice applicativo ogni connessione va aperta e chiusa con

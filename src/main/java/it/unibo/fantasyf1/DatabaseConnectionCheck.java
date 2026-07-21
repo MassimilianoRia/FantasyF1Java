@@ -22,14 +22,22 @@ public final class DatabaseConnectionCheck {
         try (
             Connection connection = DatabaseConnection.open();
             Statement statement = connection.createStatement();
-            ResultSet result = statement.executeQuery("SELECT DATABASE()")
+            ResultSet result = statement.executeQuery("""
+                SELECT
+                    DATABASE() AS NomeDatabase,
+                    (SELECT COUNT(*) FROM EDIZIONE) AS NumeroEdizioni,
+                    (SELECT COUNT(*) FROM LEGA) AS NumeroLeghe
+                """)
         ) {
             result.next();
             System.out.printf(
-                "Connessione MySQL riuscita: %s (utente: %s, database: %s)%n",
+                "Connessione MySQL riuscita: %s "
+                    + "(utente: %s, database: %s, edizioni: %d, leghe: %d)%n",
                 config.url(),
                 config.user(),
-                result.getString(1)
+                result.getString("NomeDatabase"),
+                result.getInt("NumeroEdizioni"),
+                result.getInt("NumeroLeghe")
             );
         } catch (SQLException exception) {
             System.err.printf(
