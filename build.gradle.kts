@@ -43,3 +43,10 @@ tasks.withType<Test> {
 application {
     mainClass.set("it.unibo.fantasyf1.App")
 }
+
+tasks.register<JavaExec>("checkDatabaseConnection") {
+    group = "verification"
+    description = "Verifica la connessione JDBC al database fantasy_f1"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("it.unibo.fantasyf1.DatabaseConnectionCheck")
+}
