@@ -24,18 +24,19 @@ Legenda stato: `ASSENTE`, `PARZIALE`, `DB`, `DA IMPLEMENTARE`, `VERIFICATO`.
 ## Operazioni amministrative
 
 L'amministratore è trusted ed esterno al dominio (§1.2 p. 4): nessuna entità,
-registrazione o credenziale admin e nessun accesso dall'area utente.
+registrazione o credenziale admin. La modalità amministratore è selezionabile
+soltanto nella schermata iniziale comune e non appartiene alla sessione utente.
 
 | Codice | Fonte | Comportamento richiesto | Stato iniziale | Garanzia già presente | Controllo applicativo necessario | File/simboli previsti | Test di accettazione |
 |---|---|---|---|---|---|---|---|
-| A1 | §1.5.2 p. 7; query p. 33 | Inserire edizione | ASSENTE | PK/UNIQUE numero e anno | range e campi obbligatori; errore duplicato | `AdminService.createEdition`, `AdminDao`, `AdminApplication` | creazione; duplicati distinti; area separata |
+| A1 | §1.5.2 p. 7; query p. 33 | Inserire edizione | ASSENTE | PK/UNIQUE numero e anno | range e campi obbligatori; errore duplicato | `AdminService.createEdition`, `AdminDao`, `AdminDashboard` | creazione; duplicati distinti; modalità amministratore |
 | A2 | §1.5.2 p. 7; §3.3.5 p. 18; query pp. 33–34 | Inserire o aggiornare/upsert Gran Premio | ASSENTE | UNIQUE nome | validazione descrittivi; upsert atomico | `AdminService.upsertGrandPrix`, `AdminDao` | insert e update sullo stesso nome |
 | A3 | §1.5.2 p. 7; §3.3.6 pp. 18–19; query p. 34 | Inserire weekend nell'edizione | ASSENTE | FK; UNIQUE round; CHECK 1–24 e date | lock edizione, massimo 24, selezioni coerenti, intervallo | `AdminService.addRaceWeekend`, `AdminDao` | limite 24 sotto transazione; round/data invalidi; FK |
 | A4 | §1.5.2 p. 7; query p. 34 | Inserire scuderia anagrafica | ASSENTE | UNIQUE nome | validazione | `AdminService.createConstructor`, `AdminDao` | inserimento e duplicato |
 | A5 | §1.5.2 p. 7; query p. 34 | Iscrivere scuderia con nome stagionale e vettura | ASSENTE | PK stagionale; FK; UNIQUE nome iscrizione | lock edizione, massimo 10, selezione anagrafica | `AdminService.enrollConstructor`, `AdminDao` | limite 10; duplicati; rollback |
 | A6 | §1.5.2 p. 7; query p. 34 | Inserire pilota anagrafico | ASSENTE | PK, tipi/data | validazione persona/data | `AdminService.createDriver`, `AdminDao` | inserimento; campi/date invalidi |
 | A7 | §1.5.2 p. 7; query p. 34 | Iscrivere pilota con sigla, numero e scuderia della stessa edizione | ASSENTE | FK composita; UNIQUE sigla/numero | lock edizione, massimo 20 e massimo 2/scuderia, sigla 3, range numero | `AdminService.enrollDriver`, `AdminDao` | limiti 20/2; scuderia altra edizione; sigla/numero duplicati |
-| A8 | §1.5.2 p. 7; §3.3.7 pp. 19–20; query p. 35 | Registrare/correggere prestazione ufficiale e ricalcolare | ASSENTE | PK/FK; CHECK posizioni | upsert, pilota/weekend stessa edizione, transazione unica A8→O1→O2→O3 | `WeekendProcessingService.recordPerformance`, `ResultDao`, `AdminApplication` | inserimento, correzione a cascata, idempotenza, rollback completo |
+| A8 | §1.5.2 p. 7; §3.3.7 pp. 19–20; query p. 35 | Registrare/correggere prestazione ufficiale e ricalcolare | ASSENTE | PK/FK; CHECK posizioni | upsert, pilota/weekend stessa edizione, transazione unica A8→O1→O2→O3 | `WeekendProcessingService.recordPerformance`, `ResultDao`, `AdminDashboard` | inserimento, correzione a cascata, idempotenza, rollback completo |
 
 ## Operazioni automatiche
 
@@ -57,10 +58,10 @@ registrazione o credenziale admin e nessun accesso dall'area utente.
 | U6 concorrente | query p. 32 insufficiente da sola | PK solo coppia lega/team | transazione `SELECT ... FOR UPDATE` su lega, team e partecipazioni in ordine | due richieste concorrenti: una sola partecipazione per proprietario |
 | Weekend terminato/elaborabile | U8 p. 7; O3 p. 7 | data fine e punteggi nullable | terminato se `DataFine <= oggi`; definitivo/elaborabile solo quando ogni pilota attualmente iscritto possiede una prestazione con punteggio calcolato. Ciò supporta il popolamento progressivo senza creare risultati parziali | data futura; una prestazione mancante; tutte presenti; nessun risultato parziale |
 | JDBC e transazioni | query pp. 30–36 | prepared statement nei 2 DAO; ogni DAO apre connessione; UI chiama DAO sul FX thread | DAO con `Connection` fornita; try-with-resources; commit/rollback; mapping errori | rollback fault injection; query parametrizzate; test service |
-| UI reattiva e navigazione | capitolo 4 p. 37 vuoto; requisiti allegati | singola schermata U5 sincrona | login/registrazione; dashboard a tab; selezione edizione persistente; `Task`; entry point admin separato | smoke dei due entry point; nessun pulsante stub/ID tecnico |
+| UI reattiva e navigazione | capitolo 4 p. 37 vuoto; requisiti allegati | singola schermata U5 sincrona | scelta iniziale Utente/Admin con pulsanti affiancati; login/registrazione; dashboard a tab; selezione edizione persistente; `Task`; unico entry point | smoke dell'applicazione unificata; nessun pulsante stub/ID tecnico |
 | Errori uniformi | requisito allegato | messaggio DB generico + stderr | eccezioni dominio tipizzate e mapper SQL; alert comprensibili, niente stack trace UI | duplicate/not found/validation/connection distinti |
 | DDL e seed coerenti | §3.7–3.9 pp. 25–36 | schema quasi conforme; mojibake nei nomi; seed con team vuoto partecipante e ridondanze incoerenti | correggere encoding e seed; mantenere ridondanze; nessuna tabella ADMIN/REGOLAMENTO/CLASSIFICA | script staticamente coerenti; test JDBC isolato se disponibile |
-| Separazione trusted admin | §1.2 p. 4 | assente | `AdminApp`/task Gradle separato; nessuna autenticazione/ruolo/tabella admin | classi/entry point distinti; UI utente non espone admin |
+| Isolamento trusted admin | §1.2 p. 4 | assente | modalità scelta all'avvio nello stesso `FantasyF1Application`; nessuna autenticazione/ruolo/tabella admin | unico entry point; sessione utente priva di ruolo admin; dashboard distinte |
 | Formula dimostrativa | gap confermato dall'utente | nessuna formula normativa | policy minima basata sui dati sportivi, sostituibile e documentata | unit test completo della policy |
 
 ## Decisioni e discrepanze registrate
@@ -106,10 +107,10 @@ registrazione o credenziale admin e nessun accesso dall'area utente.
 | O1 | VERIFICATO | `ScoringPolicy` isolata e ricalcolo di tutte le prestazioni | `SimpleScoringPolicyTest`, `WeekendProcessingH2Test` |
 | O2 | VERIFICATO | ricostruzione/upsert risultati soltanto con quattro score | `WeekendProcessingH2Test` |
 | O3 | VERIFICATO | somma risultati memorizzati, zero in assenza | `WeekendProcessingH2Test` |
-| Auth/sessione | VERIFICATO | sessione immutabile, migrazione legacy, logout, dashboard protetta | test auth/sessione e smoke utente |
+| Auth/sessione | VERIFICATO | sessione immutabile, migrazione legacy, logout, dashboard protetta | test auth/sessione e smoke applicazione |
 | Limiti/completezza | VERIFICATO | controlli sotto lock e `EditionStatus` | `AdminLimitsH2Test` |
 | Vincoli DB | VERIFICATO SU H2 ISOLATO | 14 tabelle equivalenti per test | `DatabaseConstraintsH2Test` |
-| UI utente/admin | VERIFICATO STATICAMENTE E CON SMOKE | due entry point, soli service, `Task` daemon, nessun ID tecnico | `smokeUser`, `smokeAdmin`, compilazione |
+| UI utente/admin | VERIFICATO STATICAMENTE E CON SMOKE | schermata iniziale comune, unico entry point, viste distinte, soli service, `Task` daemon, nessun ID tecnico | `smokeApp`, compilazione |
 | MySQL locale | BLOCCATO ESTERNAMENTE | configurazione invariata | il server risponde ma rifiuta le credenziali disponibili; nessuno script distruttivo eseguito |
 
 La suite H2 con `MODE=MySQL` valida workflow e query su uno schema isolato.

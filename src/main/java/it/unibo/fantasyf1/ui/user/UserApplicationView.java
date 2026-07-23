@@ -8,7 +8,6 @@ import it.unibo.fantasyf1.session.UserSession;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
@@ -38,27 +37,29 @@ public final class UserApplicationView implements AutoCloseable {
     private final Stage stage;
     private final ApplicationServices services;
     private final FxTaskRunner tasks;
+    private final Runnable showModeSelection;
 
     private Label dashboardStatus;
     private TeamTabView teamView;
     private LeagueTabView leagueView;
+    private boolean active;
 
     public UserApplicationView(
         final Stage stage,
         final ApplicationServices services,
-        final FxTaskRunner tasks
+        final FxTaskRunner tasks,
+        final Runnable showModeSelection
     ) {
         this.stage = Objects.requireNonNull(stage);
         this.services = Objects.requireNonNull(services);
         this.tasks = Objects.requireNonNull(tasks);
+        this.showModeSelection = Objects.requireNonNull(showModeSelection);
     }
 
     public void show() {
+        active = true;
         stage.setTitle("Fantasy Formula 1");
-        stage.setMinWidth(960);
-        stage.setMinHeight(680);
         showAuthentication();
-        stage.show();
     }
 
     private void showAuthentication() {
@@ -130,7 +131,11 @@ public final class UserApplicationView implements AutoCloseable {
                 () -> services.authentication().login(username, password),
                 session -> {
                     loginPassword.clear();
-                    showDashboard(session);
+                    if (active) {
+                        showDashboard(session);
+                    } else {
+                        services.authentication().logout();
+                    }
                 },
                 failure -> {
                     loginPassword.clear();
@@ -196,7 +201,11 @@ public final class UserApplicationView implements AutoCloseable {
         final BorderPane root = new BorderPane(card);
         root.setPadding(new Insets(32));
         BorderPane.setAlignment(card, Pos.CENTER);
-        stage.setScene(new Scene(root, 920, 700));
+        final Button changeMode = createChangeModeButton();
+        changeMode.disableProperty().bind(authTabs.disableProperty());
+        root.setTop(changeMode);
+        BorderPane.setAlignment(changeMode, Pos.CENTER_LEFT);
+        stage.getScene().setRoot(root);
         loginUsername.requestFocus();
     }
 
@@ -212,6 +221,7 @@ public final class UserApplicationView implements AutoCloseable {
         editionCombo.setPrefWidth(220);
         final Button refreshEditions = new Button("Aggiorna");
         final Button logout = new Button("Esci");
+        final Button changeMode = createChangeModeButton();
 
         final Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -223,7 +233,8 @@ public final class UserApplicationView implements AutoCloseable {
             new Label("Edizione"),
             editionCombo,
             refreshEditions,
-            logout
+            logout,
+            changeMode
         );
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(0, 0, 12, 0));
@@ -313,8 +324,18 @@ public final class UserApplicationView implements AutoCloseable {
             );
         });
 
-        stage.setScene(new Scene(root, 1220, 820));
+        stage.getScene().setRoot(root);
         loadEditions.run();
+    }
+
+    private Button createChangeModeButton() {
+        final Button button = new Button("← Selezione modalità");
+        button.setOnAction(event -> {
+            services.authentication().logout();
+            close();
+            showModeSelection.run();
+        });
+        return button;
     }
 
     private void selectEdition(
@@ -387,6 +408,7 @@ public final class UserApplicationView implements AutoCloseable {
 
     @Override
     public void close() {
+        active = false;
         teamView = null;
         leagueView = null;
     }

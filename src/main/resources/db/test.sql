@@ -13,24 +13,24 @@ SET @id_edizione = (
     FROM EDIZIONE
     WHERE Anno = 2025
 );
-SET @id_utente_mario = (
+SET @id_utente_riferimento = (
     SELECT IdUtente
     FROM UTENTE
-    WHERE Username = 'mario.rossi'
+    WHERE Username = 'alessandro.rossi'
 );
-SET @id_team_mario = (
+SET @id_team_riferimento = (
     SELECT IdTeam
     FROM TEAM_FANTASY
-    WHERE IdUtente = @id_utente_mario
+    WHERE IdUtente = @id_utente_riferimento
       AND IdEdizione = @id_edizione
-      AND Nome = 'Pole Position Club'
+      AND Nome = 'Apex Racing'
 );
 SET @id_lega = (
     SELECT IdLega
     FROM LEGA
     WHERE IdEdizione = @id_edizione
-      AND IdUtente = @id_utente_mario
-      AND Nome = 'Lega di prova'
+      AND IdUtente = @id_utente_riferimento
+      AND Nome = 'Trofeo Apex'
 );
 SET @id_gran_premio = (
     SELECT IdGranPremio
@@ -40,7 +40,7 @@ SET @id_gran_premio = (
 
 
 -- U3 - Team dell'utente nell'edizione selezionata.
--- Atteso dal seed: quattro righe per Pole Position Club, totale 90.
+-- Atteso dal seed: due team completi e quindi otto righe complessive.
 SELECT
     TF.IdTeam,
     TF.Nome AS NomeTeam,
@@ -59,13 +59,14 @@ JOIN PILOTA_ISCRITTO AS PI
     AND PI.IdPilota = CT.IdPilota
 JOIN PILOTA AS P
     ON P.IdPilota = PI.IdPilota
-WHERE TF.IdUtente = @id_utente_mario
+WHERE TF.IdUtente = @id_utente_riferimento
   AND TF.IdEdizione = @id_edizione
 ORDER BY TF.Nome, P.Cognome, P.Nome;
 
 
 -- U5 - Leghe disponibili per l'edizione.
--- Atteso dal seed: Lega di prova, amministrata da mario.rossi.
+-- Atteso dal seed: 40 leghe; Trofeo Apex è amministrata da
+-- alessandro.rossi.
 SELECT
     L.IdLega,
     L.Nome,
@@ -79,7 +80,8 @@ ORDER BY L.Nome;
 
 
 -- U7 - Leghe partecipate dall'utente nell'edizione selezionata.
--- Atteso dal seed: Pole Position Club partecipa a Lega di prova.
+-- Atteso dal seed: Apex Racing partecipa a due leghe; Apex Dynamics non è
+-- ancora iscritto e resta disponibile per provare U6.
 SELECT
     L.IdLega,
     L.Nome AS NomeLega,
@@ -90,14 +92,15 @@ JOIN PARTECIPAZIONE_TEAM AS PT
     ON PT.IdTeam = TF.IdTeam
 JOIN LEGA AS L
     ON L.IdLega = PT.IdLega
-WHERE TF.IdUtente = @id_utente_mario
+WHERE TF.IdUtente = @id_utente_riferimento
   AND TF.IdEdizione = @id_edizione
   AND L.IdEdizione = TF.IdEdizione
 ORDER BY L.Nome, TF.Nome;
 
 
 -- U8 - Dettaglio dei punteggi di un team in un weekend terminato.
--- Atteso dal seed: HAM=19, LEC=27, NOR=23, PIA=21.
+-- Atteso dal seed: quattro righe (VER, PER, HAM e RUS) con punteggi coerenti
+-- con posizione, penalizzazione e giro veloce.
 SELECT
     TF.IdTeam,
     TF.Nome AS NomeTeam,
@@ -121,8 +124,8 @@ JOIN PRESTAZIONE_WEEKEND AS PW
 JOIN WEEKEND_DI_GARA AS W
     ON W.IdEdizione = PW.IdEdizione
     AND W.IdGranPremio = PW.IdGranPremio
-WHERE TF.IdTeam = @id_team_mario
-  AND TF.IdUtente = @id_utente_mario
+WHERE TF.IdTeam = @id_team_riferimento
+  AND TF.IdUtente = @id_utente_riferimento
   AND TF.IdEdizione = @id_edizione
   AND PW.IdGranPremio = @id_gran_premio
   AND W.DataFine <= CURRENT_DATE
@@ -131,7 +134,7 @@ ORDER BY P.Cognome, P.Nome;
 
 
 -- U9 - Classifica dinamica della lega.
--- Atteso dal seed: entrambi i team hanno 90 punti; il nome risolve il pareggio.
+-- Atteso dal seed: più team ordinati per totale decrescente e poi per nome.
 SELECT
     TF.IdTeam,
     TF.Nome AS NomeTeam,
@@ -150,7 +153,7 @@ WHERE L.IdLega = @id_lega
 ORDER BY TF.PunteggioTotale DESC, TF.Nome;
 
 
--- O1 - Verifica della policy demo sui punteggi memorizzati.
+-- O1 - Verifica della policy sui punteggi memorizzati.
 -- Tutte le righe devono restituire PunteggioCoerente = 1.
 SELECT
     P.Cognome,
@@ -158,11 +161,17 @@ SELECT
     (
         CASE
             WHEN PW.PosizionamentoGara IS NULL THEN 0
-            ELSE GREATEST(0, 21 - PW.PosizionamentoGara)
+            ELSE GREATEST(
+                0,
+                21 - CAST(PW.PosizionamentoGara AS SIGNED)
+            )
         END
         + CASE
             WHEN PW.PosizionamentoQualifica IS NULL THEN 0
-            ELSE GREATEST(0, 6 - PW.PosizionamentoQualifica)
+            ELSE GREATEST(
+                0,
+                6 - CAST(PW.PosizionamentoQualifica AS SIGNED)
+            )
         END
         + CASE WHEN COALESCE(PW.RegistraGiroVeloce, FALSE) THEN 2 ELSE 0 END
         - CASE WHEN COALESCE(PW.Penalizzato, FALSE) THEN 5 ELSE 0 END
@@ -170,11 +179,17 @@ SELECT
     PW.PunteggioFantasy = (
         CASE
             WHEN PW.PosizionamentoGara IS NULL THEN 0
-            ELSE GREATEST(0, 21 - PW.PosizionamentoGara)
+            ELSE GREATEST(
+                0,
+                21 - CAST(PW.PosizionamentoGara AS SIGNED)
+            )
         END
         + CASE
             WHEN PW.PosizionamentoQualifica IS NULL THEN 0
-            ELSE GREATEST(0, 6 - PW.PosizionamentoQualifica)
+            ELSE GREATEST(
+                0,
+                6 - CAST(PW.PosizionamentoQualifica AS SIGNED)
+            )
         END
         + CASE WHEN COALESCE(PW.RegistraGiroVeloce, FALSE) THEN 2 ELSE 0 END
         - CASE WHEN COALESCE(PW.Penalizzato, FALSE) THEN 5 ELSE 0 END
@@ -218,8 +233,8 @@ GROUP BY W.IdEdizione, W.IdGranPremio, W.DataFine;
 
 
 -- O2 - Verifica del risultato di ciascun team nel weekend.
--- Ogni riga deve avere 4 componenti, 4 punteggi e SommaPiloti = 90 =
--- PunteggioWeekend.
+-- Ogni riga deve avere 4 componenti, 4 punteggi e
+-- SommaPiloti = PunteggioWeekend.
 SELECT
     RT.IdTeam,
     TF.Nome AS NomeTeam,
@@ -274,6 +289,8 @@ SELECT
     PT.IdLega,
     TF.IdTeam,
     TF.Nome AS NomeTeam,
+    L.IdEdizione AS IdEdizioneLega,
+    TF.IdEdizione AS IdEdizioneTeam,
     COUNT(DISTINCT CT.IdPilota) AS NumeroComponenti
 FROM PARTECIPAZIONE_TEAM AS PT
 JOIN LEGA AS L
@@ -289,7 +306,7 @@ GROUP BY
     TF.Nome,
     L.IdEdizione,
     TF.IdEdizione
-HAVING L.IdEdizione <> TF.IdEdizione
+HAVING IdEdizioneLega <> IdEdizioneTeam
     OR COUNT(DISTINCT CT.IdPilota) <> 4;
 
 -- Nessun utente ha più di un proprio team nella stessa lega.

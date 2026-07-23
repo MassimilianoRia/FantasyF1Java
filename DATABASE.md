@@ -16,20 +16,10 @@ La configurazione predefinita è:
 
 - URL: `jdbc:mysql://localhost:3306/fantasy_f1`
 - utente: `root`
-- password vuota
+- password: `Stellarium!23`
 
-Non salvare credenziali reali nel repository. In PowerShell è possibile
-sostituire i valori per la sessione corrente:
-
-```powershell
-$env:FANTASY_F1_DB_URL = "jdbc:mysql://localhost:3306/fantasy_f1"
-$env:FANTASY_F1_DB_USER = "nome_utente"
-$env:FANTASY_F1_DB_PASSWORD = "password"
-```
-
-Le proprietà JVM equivalenti sono `fantasyf1.db.url`,
-`fantasyf1.db.user` e `fantasyf1.db.password`; quando presenti, hanno
-precedenza sulle variabili d'ambiente.
+Non è necessario impostare variabili d'ambiente: l'applicazione usa
+automaticamente questi valori a ogni avvio.
 
 Per controllare soltanto configurazione, credenziali e raggiungibilità del
 database:
@@ -51,10 +41,19 @@ soltanto su un'istanza locale usa-e-getta, dopo aver verificato con attenzione
 host e nome del database. Non eseguirlo su un database condiviso o contenente
 dati da conservare.
 
-`seed.sql` è destinato a uno schema appena creato e non è idempotente. Inserisce
-un'edizione dimostrativa progressivamente popolata: non rappresenta
-un'edizione completa da 24 weekend, 10 scuderie e 20 piloti, ma contiene dati
-sufficienti per provare team, lega, prestazioni, risultati e classifica.
+`seed.sql` è destinato a uno schema appena creato e non è idempotente. Riproduce
+integralmente la stima dei volumi della relazione: 5 edizioni complete,
+40 piloti anagrafici e 100 iscrizioni stagionali, 15 scuderie anagrafiche e
+50 iscrizioni stagionali, 30 Gran Premi, 120 weekend, 1000 utenti, 1500 team,
+200 leghe, 6000 componenti, 1500 partecipazioni, 2400 prestazioni e
+36000 risultati team.
+
+Ogni edizione comprende esattamente 24 weekend, 10 scuderie, 20 piloti,
+300 team e 40 leghe. Piloti, scuderie e Gran Premi ricorrono intenzionalmente
+in più stagioni, con avvicendamenti fra un'edizione e l'altra. I nomi
+anagrafici rendono il dataset leggibile, mentre calendari, schieramenti e
+risultati sono sintetici e deterministici: non rappresentano dati sportivi
+ufficiali.
 
 `reset.sql` svuota tutte le 14 tabelle tramite `TRUNCATE` e azzera gli
 `AUTO_INCREMENT`. Anche questo script è distruttivo: `TRUNCATE` produce commit
@@ -71,24 +70,31 @@ direttamente su H2 o su un database di test casuale: contengono istruzioni
 MySQL quali `USE`, `UNSIGNED`, `YEAR`, variabili di sessione,
 `LAST_INSERT_ID()`, `SHA2()` e `FOREIGN_KEY_CHECKS`.
 
-## Account dimostrativi
+## Account del seed
 
-Il seed crea questi account:
+I 1000 utenti sono generati uniformemente combinando 25 nomi e 40 cognomi.
+Username ed email seguono sempre la convenzione `nome.cognome`; tutti gli
+account usano la stessa password iniziale:
 
 | Username | Password |
 | --- | --- |
-| `mario.rossi` | `demo-mario-2025` |
-| `giulia.bianchi` | `demo-giulia-2025` |
+| `alessandro.rossi` | `fantasyf1-2025` |
+| `beatrice.rossi` | `fantasyf1-2025` |
+| `luca.ferri` | `fantasyf1-2025` |
 
 Solo per dimostrare la compatibilità con dati preesistenti, il seed memorizza
-gli hash SHA-256 legacy delle due password. La password in chiaro non viene
+gli hash SHA-256 legacy delle password. La password in chiaro non viene
 salvata nella tabella `UTENTE`. Dopo un login legacy valido, il servizio di
 autenticazione sostituisce automaticamente il valore con il formato adattivo e
 salato usato per le nuove registrazioni. Password e hash non devono essere
 scritti nei log.
 
-Entrambi gli account possiedono un team completo di quattro piloti, partecipano
-alla stessa lega e hanno 90 punti.
+I team sono denominati uniformemente combinando 30 identità racing con
+10 qualificatori, ad esempio `Apex Racing`, `Vertex Motorsport` e
+`Paddock Formula`. Le leghe seguono le due convenzioni `Trofeo <tema>` e
+`Campionato <tema>`. I primi 60 proprietari hanno due team per edizione:
+il primo partecipa a due leghe, mentre il secondo non è ancora iscritto e
+consente di provare U6 senza creare altri dati.
 
 ## Policy dimostrativa di punteggio
 
@@ -105,10 +111,10 @@ punteggio        = punti gara + punti qualifica + bonus - malus
 ```
 
 Una posizione nulla vale zero; un booleano nullo viene trattato come `false`.
-Nel seed i punteggi di Leclerc, Hamilton, Norris e Piastri sono rispettivamente
-27, 19, 23 e 21. La somma del weekend è quindi 90 per ciascuno dei due team.
-La policy è una scelta applicativa dimostrativa e non viene presentata come
-formula prescritta dalla relazione.
+Il seed applica questa formula a tutte le 2400 prestazioni, calcola i 36000
+risultati dei team come somma dei rispettivi quattro piloti e riallinea
+`PunteggioTotale` alla somma dei 24 weekend. La policy è una scelta applicativa
+dimostrativa e non viene presentata come formula prescritta dalla relazione.
 
 ## Weekend terminato ed elaborabile
 
@@ -130,21 +136,17 @@ può cambiarla per consultare o provare anche le edizioni storiche.
 
 ## Avvio
 
-Area utente:
+L'applicazione ha un unico punto di accesso:
 
 ```powershell
 .\gradlew.bat run
 ```
 
-Area amministrativa trusted:
-
-```powershell
-.\gradlew.bat runAdmin
-```
-
-L'area amministrativa è un entry point locale separato e non richiede né crea
-un account `ADMIN`. Deve essere avviata soltanto in un contesto fidato; la
-normale area utente non permette auto-promozione.
+Alla prima apertura viene mostrata una schermata con due pulsanti affiancati
+per scegliere la modalità **Utente** oppure **Admin**. La modalità
+amministratore non richiede né crea un account `ADMIN` e deve essere usata
+soltanto in un contesto fidato; la sessione utente non contiene ruoli o
+meccanismi di auto-promozione.
 
 ## Test e build
 
@@ -153,8 +155,7 @@ Per eseguire la suite automatica e la build completa:
 ```powershell
 .\gradlew.bat test
 .\gradlew.bat build
-.\gradlew.bat smokeUser
-.\gradlew.bat smokeAdmin
+.\gradlew.bat smokeApp
 ```
 
 La suite usa JUnit 5 e un database H2 in-memory distinto per ogni test, avviato

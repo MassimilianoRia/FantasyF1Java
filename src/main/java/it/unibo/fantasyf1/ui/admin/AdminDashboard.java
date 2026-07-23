@@ -61,6 +61,7 @@ public final class AdminDashboard {
     private static final double COMPLETION_TOTAL = 64.0;
 
     private final AdminService admin;
+    private final Runnable showModeSelection;
     private final BorderPane root = new BorderPane();
     private final BooleanProperty busy = new SimpleBooleanProperty();
 
@@ -137,8 +138,12 @@ public final class AdminDashboard {
     private List<DriverRegistryOption> driverCatalog = List.of();
     private boolean updatingEditionSelection;
 
-    public AdminDashboard(final AdminService admin) {
+    public AdminDashboard(
+        final AdminService admin,
+        final Runnable showModeSelection
+    ) {
         this.admin = Objects.requireNonNull(admin);
+        this.showModeSelection = Objects.requireNonNull(showModeSelection);
         configureControls();
         buildLayout();
     }
@@ -260,10 +265,22 @@ public final class AdminDashboard {
     private Node createHeader() {
         final Label title = new Label("Amministrazione Fantasy Formula 1");
         title.setStyle("-fx-font-size: 26px; -fx-font-weight: bold;");
+        final Region titleSpacer = new Region();
+        HBox.setHgrow(titleSpacer, Priority.ALWAYS);
+        final Button changeMode = new Button("← Selezione modalità");
+        changeMode.disableProperty().bind(busy);
+        changeMode.setOnAction(event -> showModeSelection.run());
+        final HBox titleRow = new HBox(
+            10,
+            title,
+            titleSpacer,
+            changeMode
+        );
+        titleRow.setAlignment(Pos.CENTER_LEFT);
 
         final Label trustedNotice = new Label(
-            "Area trusted separata: nessun account o ruolo amministratore "
-                + "è memorizzato nel database."
+            "Modalità amministratore trusted: nessun account o ruolo "
+                + "amministratore è memorizzato nel database."
         );
         trustedNotice.setWrapText(true);
         trustedNotice.setStyle(
@@ -299,7 +316,7 @@ public final class AdminDashboard {
 
         return new VBox(
             10,
-            title,
+            titleRow,
             trustedNotice,
             editionRow,
             completionBox

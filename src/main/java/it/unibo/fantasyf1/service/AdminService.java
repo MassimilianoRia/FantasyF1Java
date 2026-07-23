@@ -22,7 +22,7 @@ import java.util.Locale;
 import java.util.Objects;
 
 /**
- * A1–A8. Questa classe è esposta soltanto dall'entry point trusted admin.
+ * A1–A8. Questa classe è usata soltanto dalla modalità amministratore trusted.
  */
 public final class AdminService {
 

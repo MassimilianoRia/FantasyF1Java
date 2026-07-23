@@ -30,12 +30,12 @@ public final class App {
                 || services.authentication().isAuthenticated()
         ) {
             throw new IllegalStateException(
-                "Composition root utente non valido"
+                "Composition root dell'applicazione non valido"
             );
         }
         System.out.println(
-            "Smoke test area utente riuscito: "
-                + "composition root creato senza accesso al database."
+            "Smoke test applicazione unificata riuscito: modalità utente e "
+                + "amministratore disponibili senza accesso al database."
         );
     }
 }

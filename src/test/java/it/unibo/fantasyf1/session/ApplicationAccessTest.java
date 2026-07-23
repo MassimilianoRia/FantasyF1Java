@@ -2,11 +2,11 @@ package it.unibo.fantasyf1.session;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import it.unibo.fantasyf1.AdminApp;
-import it.unibo.fantasyf1.App;
+import it.unibo.fantasyf1.FantasyF1Application;
+
+import javafx.application.Application;
 
 import java.util.Arrays;
 import java.util.List;
@@ -14,13 +14,15 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * Blocca la scelta normativa: l'admin è un entry point trusted, non un ruolo
- * assegnabile alla sessione utente.
+ * Verifica l'accesso unificato senza introdurre ruoli nella sessione utente.
  */
-final class AdminSeparationTest {
+final class ApplicationAccessTest {
 
     @Test
-    void userSessionHasNoAdminRoleAndEntryPointsRemainSeparate() {
+    void unifiedApplicationKeepsAdminOutsideTheUserSession() {
+        assertTrue(
+            Application.class.isAssignableFrom(FantasyF1Application.class)
+        );
         assertTrue(UserSession.class.isRecord());
         assertEquals(
             List.of("userId", "username"),
@@ -34,6 +36,5 @@ final class AdminSeparationTest {
                 .anyMatch(name -> name.contains("admin")
                     || name.contains("role"))
         );
-        assertNotEquals(App.class, AdminApp.class);
     }
 }

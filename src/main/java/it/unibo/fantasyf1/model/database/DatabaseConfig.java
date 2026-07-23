@@ -3,21 +3,21 @@ package it.unibo.fantasyf1.model.database;
 /**
  * Configurazione necessaria per collegarsi al database MySQL.
  *
- * <p>I valori possono essere impostati tramite variabili d'ambiente oppure
- * tramite proprieta JVM. Le proprieta JVM hanno la precedenza.</p>
+ * <p>URL e utente possono essere impostati tramite variabili d'ambiente oppure
+ * tramite proprieta JVM. La password del database locale e inclusa nella
+ * configurazione del progetto.</p>
  */
 public record DatabaseConfig(String url, String user, String password) {
 
     public static final String DEFAULT_URL =
         "jdbc:mysql://localhost:3306/fantasy_f1";
+    private static final String DEFAULT_PASSWORD = "Stellarium!23";
 
     private static final String URL_PROPERTY = "fantasyf1.db.url";
     private static final String USER_PROPERTY = "fantasyf1.db.user";
-    private static final String PASSWORD_PROPERTY = "fantasyf1.db.password";
 
     private static final String URL_ENV = "FANTASY_F1_DB_URL";
     private static final String USER_ENV = "FANTASY_F1_DB_USER";
-    private static final String PASSWORD_ENV = "FANTASY_F1_DB_PASSWORD";
 
     public DatabaseConfig {
         if (url == null || url.isBlank()) {
@@ -33,7 +33,7 @@ public record DatabaseConfig(String url, String user, String password) {
 
     /**
      * Carica la configurazione. I valori predefiniti sono l'URL locale del
-     * progetto, l'utente {@code root} e una password vuota.
+     * progetto, l'utente {@code root} e la password del database di sviluppo.
      *
      * @return configurazione del database
      */
@@ -41,7 +41,7 @@ public record DatabaseConfig(String url, String user, String password) {
         return new DatabaseConfig(
             value(URL_PROPERTY, URL_ENV, DEFAULT_URL),
             value(USER_PROPERTY, USER_ENV, "root"),
-            value(PASSWORD_PROPERTY, PASSWORD_ENV, "")
+            DEFAULT_PASSWORD
         );
     }
 

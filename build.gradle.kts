@@ -42,26 +42,11 @@ tasks.register<JavaExec>("checkDatabaseConnection") {
     mainClass.set("it.unibo.fantasyf1.DatabaseConnectionCheck")
 }
 
-tasks.register<JavaExec>("runAdmin") {
-    group = "application"
-    description = "Avvia l'area amministrativa trusted"
-    classpath = sourceSets["main"].runtimeClasspath
-    mainClass.set("it.unibo.fantasyf1.AdminApp")
-}
-
-tasks.register<JavaExec>("smokeUser") {
+tasks.register<JavaExec>("smokeApp") {
     group = "verification"
-    description = "Verifica l'avvio dell'entry point utente senza collegarsi al database"
+    description = "Verifica il punto di accesso unificato senza collegarsi al database"
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("it.unibo.fantasyf1.App")
-    args("--smoke")
-}
-
-tasks.register<JavaExec>("smokeAdmin") {
-    group = "verification"
-    description = "Verifica l'avvio dell'entry point amministrativo senza collegarsi al database"
-    classpath = sourceSets["main"].runtimeClasspath
-    mainClass.set("it.unibo.fantasyf1.AdminApp")
     args("--smoke")
 }
 
