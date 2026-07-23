@@ -114,6 +114,17 @@ public final class LeagueService {
         ));
     }
 
+    public List<LegaDisponibile> myLeagues(final int editionId) {
+        final UserSession session = ServiceGuards.authenticated(sessions);
+        return transactions.query(
+            connection -> leagues.findOwnedByAdministrator(
+                connection,
+                session.userId(),
+                editionId
+            )
+        );
+    }
+
     public List<StandingRow> standings(
         final int leagueId,
         final int editionId

@@ -47,6 +47,17 @@ public final class AdminDao {
             `Città` = VALUES(`Città`)
         """;
 
+    private static final String INSERT_GRAND_PRIX = """
+        INSERT INTO GRAN_PREMIO (Nome, Circuito, Nazione, `Città`)
+        VALUES (?, ?, ?, ?)
+        """;
+
+    private static final String UPDATE_GRAND_PRIX = """
+        UPDATE GRAN_PREMIO
+        SET Nome = ?, Circuito = ?, Nazione = ?, `Città` = ?
+        WHERE IdGranPremio = ?
+        """;
+
     private static final String FIND_GRAND_PRIX_BY_NAME = """
         SELECT IdGranPremio
         FROM GRAN_PREMIO
@@ -182,6 +193,47 @@ public final class AdminDao {
                 }
                 return result.getInt(1);
             }
+        }
+    }
+
+    public int insertGrandPrix(
+        final Connection connection,
+        final String name,
+        final String circuit,
+        final String country,
+        final String city
+    ) throws SQLException {
+        return insertReturningKey(
+            connection,
+            INSERT_GRAND_PRIX,
+            statement -> {
+                statement.setString(1, name);
+                statement.setString(2, circuit);
+                statement.setString(3, country);
+                statement.setString(4, city);
+            }
+        );
+    }
+
+    public void updateGrandPrix(
+        final Connection connection,
+        final int grandPrixId,
+        final String name,
+        final String circuit,
+        final String country,
+        final String city
+    ) throws SQLException {
+        try (PreparedStatement statement =
+                 connection.prepareStatement(UPDATE_GRAND_PRIX)) {
+            statement.setString(1, name);
+            statement.setString(2, circuit);
+            statement.setString(3, country);
+            statement.setString(4, city);
+            statement.setInt(5, grandPrixId);
+            requireSingleUpdate(
+                statement,
+                "Gran Premio non trovato durante l'aggiornamento"
+            );
         }
     }
 

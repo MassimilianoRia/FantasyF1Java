@@ -12,10 +12,12 @@ import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.SplitPane;
@@ -25,7 +27,10 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 
 import java.util.List;
 import java.util.function.BiConsumer;
@@ -116,10 +121,7 @@ final class TeamTabView {
             rosterList,
             TeamDriver::toString
         );
-        UserViewSupport.renderList(
-            driverOptions,
-            DriverOption::toString
-        );
+        driverOptions.setCellFactory(ignored -> new DriverSelectionCell());
         UserViewSupport.renderCombo(
             scoreTeam,
             team -> "%s — %d punti".formatted(
@@ -149,8 +151,10 @@ final class TeamTabView {
             SelectionMode.MULTIPLE
         );
         driverOptions.getSelectionModel().getSelectedItems().addListener(
-            (ListChangeListener<DriverOption>) change ->
-                updateCreateAvailability()
+            (ListChangeListener<DriverOption>) change -> {
+                updateCreateAvailability();
+                driverOptions.refresh();
+            }
         );
         teamName.textProperty().addListener(
             (observable, previous, current) -> updateCreateAvailability()
@@ -196,8 +200,9 @@ final class TeamTabView {
         );
         HBox.setHgrow(teamName, Priority.ALWAYS);
         final Label instructions = new Label(
-            "Seleziona esattamente quattro piloti distinti "
-                + "dell'edizione corrente."
+            "Clicca una riga oppure il tasto + per aggiungere un pilota. "
+                + "Clicca di nuovo per rimuoverlo; servono esattamente "
+                + "quattro piloti."
         );
         instructions.setWrapText(true);
         final HBox actions = new HBox(12, selectedDrivers, createTeam);
@@ -448,6 +453,88 @@ final class TeamTabView {
         final BorderPane pane = new BorderPane(content);
         pane.setPadding(new Insets(12));
         return pane;
+    }
+
+    private final class DriverSelectionCell
+        extends ListCell<DriverOption> {
+
+        private final Label description = new Label();
+        private final Button toggle = new Button("+");
+        private final HBox content;
+
+        DriverSelectionCell() {
+            final Region spacer = new Region();
+            HBox.setHgrow(spacer, Priority.ALWAYS);
+            toggle.setMinWidth(38);
+            toggle.setFocusTraversable(true);
+            content = new HBox(10, description, spacer, toggle);
+            content.setAlignment(Pos.CENTER_LEFT);
+
+            toggle.setOnAction(event -> toggleSelection());
+            addEventFilter(MouseEvent.MOUSE_PRESSED, event -> {
+                if (
+                    event.getButton() == MouseButton.PRIMARY
+                        && !isEmpty()
+                ) {
+                    toggleSelection();
+                    event.consume();
+                }
+            });
+            selectedProperty().addListener(
+                (observable, previous, selected) -> updateToggle()
+            );
+        }
+
+        @Override
+        protected void updateItem(
+            final DriverOption driver,
+            final boolean empty
+        ) {
+            super.updateItem(driver, empty);
+            if (empty || driver == null) {
+                description.setText(null);
+                setGraphic(null);
+            } else {
+                description.setText(driver.toString());
+                setGraphic(content);
+                updateToggle();
+            }
+            setText(null);
+        }
+
+        private void toggleSelection() {
+            if (isEmpty() || getIndex() < 0) {
+                return;
+            }
+            final var selection = driverOptions.getSelectionModel();
+            if (selection.isSelected(getIndex())) {
+                selection.clearSelection(getIndex());
+            } else if (selection.getSelectedItems().size() < 4) {
+                selection.select(getIndex());
+            }
+            driverOptions.requestFocus();
+            updateToggle();
+        }
+
+        private void updateToggle() {
+            if (isEmpty() || getIndex() < 0) {
+                return;
+            }
+            final var selection = driverOptions.getSelectionModel();
+            final boolean selected = selection.isSelected(getIndex());
+            toggle.setText(selected ? "✓" : "+");
+            toggle.setAccessibleText(
+                selected ? "Rimuovi pilota" : "Aggiungi pilota"
+            );
+            toggle.setDisable(
+                !selected && selection.getSelectedItems().size() >= 4
+            );
+            content.setStyle(
+                selected
+                    ? "-fx-background-color: #e8f3ff; -fx-padding: 5px;"
+                    : "-fx-padding: 5px;"
+            );
+        }
     }
 
     private record TeamData(

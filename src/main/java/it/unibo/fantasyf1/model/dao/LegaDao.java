@@ -78,6 +78,19 @@ public final class LegaDao {
         ORDER BY L.Nome, TF.Nome
         """;
 
+    private static final String FIND_OWNED = """
+        SELECT
+            L.IdLega,
+            L.Nome,
+            U.IdUtente AS IdAmministratore,
+            U.Username AS Amministratore
+        FROM LEGA L
+        JOIN UTENTE U ON U.IdUtente = L.IdUtente
+        WHERE L.IdUtente = ?
+          AND L.IdEdizione = ?
+        ORDER BY L.Nome
+        """;
+
     private static final String FIND_STANDINGS = """
         SELECT
             TF.IdTeam,
@@ -239,6 +252,30 @@ public final class LegaDao {
                         result.getString("NomeLega"),
                         result.getInt("IdTeam"),
                         result.getString("NomeTeam")
+                    ));
+                }
+            }
+        }
+        return List.copyOf(leagues);
+    }
+
+    public List<LegaDisponibile> findOwnedByAdministrator(
+        final Connection connection,
+        final int administratorId,
+        final int editionId
+    ) throws SQLException {
+        final List<LegaDisponibile> leagues = new ArrayList<>();
+        try (PreparedStatement statement =
+                 connection.prepareStatement(FIND_OWNED)) {
+            statement.setInt(1, administratorId);
+            statement.setInt(2, editionId);
+            try (ResultSet result = statement.executeQuery()) {
+                while (result.next()) {
+                    leagues.add(new LegaDisponibile(
+                        result.getInt("IdLega"),
+                        result.getString("Nome"),
+                        result.getInt("IdAmministratore"),
+                        result.getString("Amministratore")
                     ));
                 }
             }

@@ -44,23 +44,30 @@ final class AdminCrudH2Test {
         assertEquals(1, editions.size());
         assertEquals(editionId, editions.getFirst().id());
 
-        final int grandPrixId = admin.upsertGrandPrix(
+        final int grandPrixId = admin.createGrandPrix(
             "Gran Premio Demo",
             "Circuito iniziale",
             "Italia",
             "Imola"
         );
-        final int sameGrandPrixId = admin.upsertGrandPrix(
-            "Gran Premio Demo",
+        admin.updateGrandPrix(
+            grandPrixId,
+            "Gran Premio Demo aggiornato",
             "Circuito aggiornato",
             "Italia",
             "Monza"
         );
-        assertEquals(grandPrixId, sameGrandPrixId);
         assertEquals(
             "Circuito aggiornato",
             database.queryString(
                 "SELECT Circuito FROM GRAN_PREMIO WHERE IdGranPremio = ?",
+                grandPrixId
+            )
+        );
+        assertEquals(
+            "Gran Premio Demo aggiornato",
+            database.queryString(
+                "SELECT Nome FROM GRAN_PREMIO WHERE IdGranPremio = ?",
                 grandPrixId
             )
         );

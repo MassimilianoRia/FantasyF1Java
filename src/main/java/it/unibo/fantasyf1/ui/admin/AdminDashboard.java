@@ -15,7 +15,9 @@ import it.unibo.fantasyf1.service.PerformanceRequest;
 import it.unibo.fantasyf1.service.ProcessingOutcome;
 
 import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -85,6 +87,14 @@ public final class AdminDashboard {
 
     private final ComboBox<GrandPrixOption> grandPrixEditCombo =
         new ComboBox<>();
+    private final ObjectProperty<GrandPrixMode> grandPrixMode =
+        new SimpleObjectProperty<>();
+    private final Button insertGrandPrixMode =
+        new Button("Inserisci");
+    private final Button updateGrandPrixMode =
+        new Button("Aggiorna");
+    private final Button saveGrandPrixButton =
+        new Button("Continua");
     private final TextField grandPrixNameField = new TextField();
     private final TextField circuitField = new TextField();
     private final TextField countryField = new TextField();
@@ -129,6 +139,8 @@ public final class AdminDashboard {
     );
     private final Button recalculateButton =
         new Button("Ricalcola weekend (O1-O3)");
+    private final Button recordPerformanceButton =
+        new Button("Registra / correggi prestazione");
     private final Label processingOutcomeLabel = new Label(
         "Nessuna prestazione registrata in questa sessione."
     );
@@ -237,7 +249,15 @@ public final class AdminDashboard {
             }
         );
         grandPrixEditCombo.valueProperty().addListener(
-            (observable, previous, selected) -> populateGrandPrixForm(selected)
+            (observable, previous, selected) -> {
+                if (grandPrixMode.get() == GrandPrixMode.UPDATE) {
+                    populateGrandPrixForm(selected);
+                }
+            }
+        );
+        grandPrixMode.addListener(
+            (observable, previous, selected) ->
+                updateGrandPrixModeControls(selected)
         );
         refreshButton.setOnAction(
             event -> refreshAll(selectedEditionId(), "Cataloghi aggiornati.")
@@ -250,7 +270,15 @@ public final class AdminDashboard {
         editionCombo.disableProperty().bind(busy);
         refreshButton.disableProperty().bind(busy);
         recalculateButton.disableProperty().bind(
-            busy.or(performanceWeekendCombo.valueProperty().isNull())
+            busy
+                .or(editionCombo.valueProperty().isNull())
+                .or(performanceWeekendCombo.valueProperty().isNull())
+        );
+        recordPerformanceButton.disableProperty().bind(
+            busy
+                .or(editionCombo.valueProperty().isNull())
+                .or(performanceWeekendCombo.valueProperty().isNull())
+                .or(performanceDriverCombo.valueProperty().isNull())
         );
     }
 
@@ -277,16 +305,6 @@ public final class AdminDashboard {
             changeMode
         );
         titleRow.setAlignment(Pos.CENTER_LEFT);
-
-        final Label trustedNotice = new Label(
-            "Modalità amministratore trusted: nessun account o ruolo "
-                + "amministratore è memorizzato nel database."
-        );
-        trustedNotice.setWrapText(true);
-        trustedNotice.setStyle(
-            "-fx-text-fill: #7a3e00; -fx-background-color: #fff4df; "
-                + "-fx-padding: 9px; -fx-background-radius: 4px;"
-        );
 
         final Label editionLabel = new Label("Edizione operativa:");
         editionLabel.setStyle("-fx-font-weight: bold;");
@@ -317,7 +335,6 @@ public final class AdminDashboard {
         return new VBox(
             10,
             titleRow,
-            trustedNotice,
             editionRow,
             completionBox
         );
@@ -377,24 +394,57 @@ public final class AdminDashboard {
 
     private Node createGrandPrixForm() {
         final GridPane form = createGrid();
-        addRow(form, 0, "Gran Premio esistente", grandPrixEditCombo);
-        addRow(form, 1, "Nome", grandPrixNameField);
-        addRow(form, 2, "Circuito", circuitField);
-        addRow(form, 3, "Nazione", countryField);
-        addRow(form, 4, "Città", cityField);
+        final HBox modeChoice = new HBox(
+            10,
+            insertGrandPrixMode,
+            updateGrandPrixMode
+        );
+        addRow(form, 0, "Operazione", modeChoice);
+        addRow(form, 1, "Gran Premio esistente", grandPrixEditCombo);
+        addRow(form, 2, "Nome", grandPrixNameField);
+        addRow(form, 3, "Circuito", circuitField);
+        addRow(form, 4, "Nazione", countryField);
+        addRow(form, 5, "Città", cityField);
 
-        final Button save = new Button("Salva / aggiorna Gran Premio");
-        save.disableProperty().bind(busy);
-        save.setOnAction(event -> upsertGrandPrix());
-        final Button clear = new Button("Nuovo");
-        clear.disableProperty().bind(busy);
-        clear.setOnAction(event -> clearGrandPrixForm());
+        insertGrandPrixMode.disableProperty().bind(busy);
+        updateGrandPrixMode.disableProperty().bind(busy);
+        insertGrandPrixMode.setOnAction(
+            event -> selectGrandPrixMode(GrandPrixMode.INSERT)
+        );
+        updateGrandPrixMode.setOnAction(
+            event -> selectGrandPrixMode(GrandPrixMode.UPDATE)
+        );
+        saveGrandPrixButton.setOnAction(event -> saveGrandPrix());
+        final Button cancel = new Button("Annulla operazione");
+        cancel.disableProperty().bind(busy);
+        cancel.setOnAction(event -> selectGrandPrixMode(null));
+
+        grandPrixEditCombo.disableProperty().bind(
+            busy.or(grandPrixMode.isNotEqualTo(GrandPrixMode.UPDATE))
+        );
+        for (TextField field : List.of(
+            grandPrixNameField,
+            circuitField,
+            countryField,
+            cityField
+        )) {
+            field.disableProperty().bind(busy.or(grandPrixMode.isNull()));
+        }
+        saveGrandPrixButton.disableProperty().bind(
+            busy
+                .or(grandPrixMode.isNull())
+                .or(
+                    grandPrixMode.isEqualTo(GrandPrixMode.UPDATE)
+                        .and(grandPrixEditCombo.valueProperty().isNull())
+                )
+        );
+        updateGrandPrixModeControls(null);
         return formPage(
             "A2 — Inserimento o aggiornamento Gran Premio",
-            "Seleziona un elemento esistente per modificarlo oppure lascia "
-                + "vuota la selezione e inserisci un nuovo nome.",
+            "Scegli prima l'operazione. In modalità aggiornamento seleziona "
+                + "il Gran Premio da modificare.",
             form,
-            new HBox(10, save, clear)
+            new HBox(10, saveGrandPrixButton, cancel)
         );
     }
 
@@ -501,9 +551,7 @@ public final class AdminDashboard {
         addRow(form, 4, "Penalizzazione", penalizedCheck);
         addRow(form, 5, "Giro veloce", fastestLapCheck);
 
-        final Button save = new Button("Registra / correggi prestazione");
-        save.disableProperty().bind(busy);
-        save.setOnAction(event -> recordPerformance());
+        recordPerformanceButton.setOnAction(event -> recordPerformance());
         recalculateButton.setOnAction(event -> recalculateWeekend());
 
         processingOutcomeLabel.setWrapText(true);
@@ -512,7 +560,7 @@ public final class AdminDashboard {
         );
         final VBox actions = new VBox(
             10,
-            new HBox(10, save, recalculateButton),
+            new HBox(10, recordPerformanceButton, recalculateButton),
             processingOutcomeLabel
         );
         return formPage(
@@ -565,18 +613,53 @@ public final class AdminDashboard {
         }
     }
 
-    private void upsertGrandPrix() {
+    private void saveGrandPrix() {
+        final GrandPrixMode selectedMode = grandPrixMode.get();
+        if (selectedMode == null) {
+            showInputError(new IllegalArgumentException(
+                "Scegli se inserire o aggiornare un Gran Premio."
+            ));
+            return;
+        }
         final String name = grandPrixNameField.getText();
         final String circuit = circuitField.getText();
         final String country = countryField.getText();
         final String city = cityField.getText();
+        final GrandPrixOption selected = grandPrixEditCombo.getValue();
+        if (selectedMode == GrandPrixMode.UPDATE && selected == null) {
+            showInputError(new IllegalArgumentException(
+                "Seleziona il Gran Premio da aggiornare."
+            ));
+            return;
+        }
         executeMutation(
             "salvataggio-gran-premio",
             "Salvataggio del Gran Premio in corso…",
-            () -> admin.upsertGrandPrix(name, circuit, country, city),
+            () -> {
+                if (selectedMode == GrandPrixMode.INSERT) {
+                    return admin.createGrandPrix(
+                        name,
+                        circuit,
+                        country,
+                        city
+                    );
+                }
+                admin.updateGrandPrix(
+                    selected.id(),
+                    name,
+                    circuit,
+                    country,
+                    city
+                );
+                return selected.id();
+            },
             ignored -> {
-                clearGrandPrixForm();
-                confirm("Gran Premio salvato correttamente.");
+                selectGrandPrixMode(null);
+                confirm(
+                    selectedMode == GrandPrixMode.INSERT
+                        ? "Gran Premio inserito correttamente."
+                        : "Gran Premio aggiornato correttamente."
+                );
                 refreshAll(
                     selectedEditionId(),
                     "Catalogo dei Gran Premi aggiornato."
@@ -1043,6 +1126,8 @@ public final class AdminDashboard {
             catalogs.weekends(),
             RaceWeekend::grandPrixId
         );
+        selectFirstIfEmpty(performanceDriverCombo);
+        selectFirstIfEmpty(performanceWeekendCombo);
     }
 
     private void applyEditionStatus(final EditionStatus status) {
@@ -1205,6 +1290,10 @@ public final class AdminDashboard {
 
     private void populateGrandPrixForm(final GrandPrixOption grandPrix) {
         if (grandPrix == null) {
+            grandPrixNameField.clear();
+            circuitField.clear();
+            countryField.clear();
+            cityField.clear();
             return;
         }
         grandPrixNameField.setText(grandPrix.name());
@@ -1219,6 +1308,36 @@ public final class AdminDashboard {
         circuitField.clear();
         countryField.clear();
         cityField.clear();
+    }
+
+    private void selectGrandPrixMode(final GrandPrixMode mode) {
+        grandPrixMode.set(mode);
+        clearGrandPrixForm();
+        if (mode == GrandPrixMode.INSERT) {
+            grandPrixNameField.requestFocus();
+        } else if (mode == GrandPrixMode.UPDATE) {
+            grandPrixEditCombo.requestFocus();
+        }
+    }
+
+    private void updateGrandPrixModeControls(final GrandPrixMode mode) {
+        insertGrandPrixMode.setStyle(
+            mode == GrandPrixMode.INSERT
+                ? "-fx-font-weight: bold; -fx-background-color: #cfe7ff;"
+                : ""
+        );
+        updateGrandPrixMode.setStyle(
+            mode == GrandPrixMode.UPDATE
+                ? "-fx-font-weight: bold; -fx-background-color: #cfe7ff;"
+                : ""
+        );
+        saveGrandPrixButton.setText(
+            mode == GrandPrixMode.INSERT
+                ? "Inserisci Gran Premio"
+                : mode == GrandPrixMode.UPDATE
+                    ? "Aggiorna Gran Premio"
+                    : "Continua"
+        );
     }
 
     private void setEditionScopedTabsEnabled(final boolean enabled) {
@@ -1423,6 +1542,17 @@ public final class AdminDashboard {
             }
         }
         combo.setValue(null);
+    }
+
+    private static <T> void selectFirstIfEmpty(final ComboBox<T> combo) {
+        if (combo.getValue() == null && !combo.getItems().isEmpty()) {
+            combo.getSelectionModel().selectFirst();
+        }
+    }
+
+    private enum GrandPrixMode {
+        INSERT,
+        UPDATE
     }
 
     private record GlobalCatalogs(

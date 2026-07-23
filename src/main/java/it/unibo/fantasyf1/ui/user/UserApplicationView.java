@@ -221,7 +221,6 @@ public final class UserApplicationView implements AutoCloseable {
         editionCombo.setPrefWidth(220);
         final Button refreshEditions = new Button("Aggiorna");
         final Button logout = new Button("Esci");
-        final Button changeMode = createChangeModeButton();
 
         final Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -233,8 +232,7 @@ public final class UserApplicationView implements AutoCloseable {
             new Label("Edizione"),
             editionCombo,
             refreshEditions,
-            logout,
-            changeMode
+            logout
         );
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(0, 0, 12, 0));

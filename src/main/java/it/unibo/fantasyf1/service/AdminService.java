@@ -85,6 +85,59 @@ public final class AdminService {
         ));
     }
 
+    public int createGrandPrix(
+        final String nameValue,
+        final String circuitValue,
+        final String countryValue,
+        final String cityValue
+    ) {
+        final GrandPrixData data = grandPrixData(
+            nameValue,
+            circuitValue,
+            countryValue,
+            cityValue
+        );
+        return transactions.executeInTransaction(
+            connection -> admin.insertGrandPrix(
+                connection,
+                data.name(),
+                data.circuit(),
+                data.country(),
+                data.city()
+            )
+        );
+    }
+
+    public void updateGrandPrix(
+        final int grandPrixId,
+        final String nameValue,
+        final String circuitValue,
+        final String countryValue,
+        final String cityValue
+    ) {
+        if (grandPrixId <= 0) {
+            throw ServiceGuards.invalid(
+                "Seleziona un Gran Premio da aggiornare."
+            );
+        }
+        final GrandPrixData data = grandPrixData(
+            nameValue,
+            circuitValue,
+            countryValue,
+            cityValue
+        );
+        transactions.inTransaction(connection -> {
+            admin.updateGrandPrix(
+                connection,
+                grandPrixId,
+                data.name(),
+                data.circuit(),
+                data.country(),
+                data.city()
+            );
+        });
+    }
+
     public void addWeekend(
         final int editionId,
         final int grandPrixId,
@@ -358,5 +411,27 @@ public final class AdminService {
             maximum,
             label
         );
+    }
+
+    private static GrandPrixData grandPrixData(
+        final String name,
+        final String circuit,
+        final String country,
+        final String city
+    ) {
+        return new GrandPrixData(
+            text(name, "Il nome", 100),
+            text(circuit, "Il circuito", 100),
+            text(country, "La nazione", 80),
+            text(city, "La città", 80)
+        );
+    }
+
+    private record GrandPrixData(
+        String name,
+        String circuit,
+        String country,
+        String city
+    ) {
     }
 }

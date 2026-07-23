@@ -286,12 +286,20 @@ public final class TeamDao {
                         result.getString("Nome"),
                         result.getString("Cognome"),
                         result.getString("SiglaGara"),
-                        (Integer) result.getObject("PunteggioFantasy")
+                        nullableInt(result, "PunteggioFantasy")
                     ));
                 }
             }
         }
         return List.copyOf(scores);
+    }
+
+    private static Integer nullableInt(
+        final ResultSet result,
+        final String column
+    ) throws SQLException {
+        final int value = result.getInt(column);
+        return result.wasNull() ? null : value;
     }
 
     private static String readString(

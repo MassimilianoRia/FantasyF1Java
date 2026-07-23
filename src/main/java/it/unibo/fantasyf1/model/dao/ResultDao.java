@@ -142,10 +142,11 @@ public final class ResultDao {
                     rows.add(new PerformanceRow(
                         result.getInt("IdPilota"),
                         new PerformanceData(
-                            (Integer) result.getObject(
+                            nullableInt(
+                                result,
                                 "PosizionamentoQualifica"
                             ),
-                            (Integer) result.getObject("PosizionamentoGara"),
+                            nullableInt(result, "PosizionamentoGara"),
                             result.getBoolean("Penalizzato"),
                             result.getBoolean("RegistraGiroVeloce")
                         )
@@ -281,6 +282,14 @@ public final class ResultDao {
             }
         }
         return List.copyOf(ids);
+    }
+
+    private static Integer nullableInt(
+        final ResultSet result,
+        final String column
+    ) throws SQLException {
+        final int value = result.getInt(column);
+        return result.wasNull() ? null : value;
     }
 
     public void upsertResultForTeam(

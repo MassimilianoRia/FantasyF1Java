@@ -201,6 +201,12 @@ final class TeamLeagueServiceH2Test {
             .toList());
         assertNotEquals(zeta, alpha);
         assertTrue(zeta > 0 && alpha > 0);
+        assertEquals(
+            List.of("Alpha League", "Zeta League"),
+            leagues.myLeagues(edition2025).stream()
+                .map(LegaDisponibile::nome)
+                .toList()
+        );
     }
 
     @Test

@@ -41,19 +41,18 @@ soltanto su un'istanza locale usa-e-getta, dopo aver verificato con attenzione
 host e nome del database. Non eseguirlo su un database condiviso o contenente
 dati da conservare.
 
-`seed.sql` è destinato a uno schema appena creato e non è idempotente. Riproduce
-integralmente la stima dei volumi della relazione: 5 edizioni complete,
-40 piloti anagrafici e 100 iscrizioni stagionali, 15 scuderie anagrafiche e
-50 iscrizioni stagionali, 30 Gran Premi, 120 weekend, 1000 utenti, 1500 team,
-200 leghe, 6000 componenti, 1500 partecipazioni, 2400 prestazioni e
-36000 risultati team.
+`seed.sql` ripristina sempre il dataset dimostrativo: 5 edizioni,
+40 piloti anagrafici e 98 iscrizioni stagionali, 15 scuderie anagrafiche e
+49 iscrizioni stagionali, 30 Gran Premi, 118 weekend, 1001 utenti, 1502 team,
+201 leghe, 6008 componenti, 1501 partecipazioni, 2280 prestazioni e
+34840 risultati team.
 
-Ogni edizione comprende esattamente 24 weekend, 10 scuderie, 20 piloti,
-300 team e 40 leghe. Piloti, scuderie e Gran Premi ricorrono intenzionalmente
-in più stagioni, con avvicendamenti fra un'edizione e l'altra. I nomi
-anagrafici rendono il dataset leggibile, mentre calendari, schieramenti e
-risultati sono sintetici e deterministici: non rappresentano dati sportivi
-ufficiali.
+Le edizioni 2021-2024 sono complete con 24 weekend, 10 scuderie, 20 piloti,
+300 team e 40 leghe. Il 2025 resta intenzionalmente incompleto: contiene
+22 weekend, 9 scuderie, 18 piloti e prestazioni soltanto per i primi 20
+weekend. In questo modo A3, A5, A7 e A8 possono essere provate su dati
+parziali. Piloti, scuderie e Gran Premi ricorrono intenzionalmente in più
+stagioni, con avvicendamenti fra un'edizione e l'altra.
 
 `reset.sql` svuota tutte le 14 tabelle tramite `TRUNCATE` e azzera gli
 `AUTO_INCREMENT`. Anche questo script è distruttivo: `TRUNCATE` produce commit
@@ -81,6 +80,7 @@ account usano la stessa password iniziale:
 | `alessandro.rossi` | `fantasyf1-2025` |
 | `beatrice.rossi` | `fantasyf1-2025` |
 | `luca.ferri` | `fantasyf1-2025` |
+| `max` | `database` |
 
 Solo per dimostrare la compatibilità con dati preesistenti, il seed memorizza
 gli hash SHA-256 legacy delle password. La password in chiaro non viene
@@ -95,6 +95,13 @@ I team sono denominati uniformemente combinando 30 identità racing con
 `Campionato <tema>`. I primi 60 proprietari hanno due team per edizione:
 il primo partecipa a due leghe, mentre il secondo non è ancora iscritto e
 consente di provare U6 senza creare altri dati.
+
+L'account `max` possiede inoltre `TeamProva1`, `TeamProva2` e la lega
+`LegaProva1` nell'edizione 2025. `TeamProva2` è già iscritto a
+`LegaProva1`, mentre `TeamProva1` resta disponibile per altre prove.
+Le rose generate per il volume sono combinazioni distinte e pseudo-casuali
+ma ripetibili, così le classifiche non raggruppano sistematicamente team con
+gli stessi quattro piloti.
 
 ## Policy dimostrativa di punteggio
 
@@ -111,10 +118,10 @@ punteggio        = punti gara + punti qualifica + bonus - malus
 ```
 
 Una posizione nulla vale zero; un booleano nullo viene trattato come `false`.
-Il seed applica questa formula a tutte le 2400 prestazioni, calcola i 36000
+Il seed applica questa formula a tutte le 2280 prestazioni, calcola i 34840
 risultati dei team come somma dei rispettivi quattro piloti e riallinea
-`PunteggioTotale` alla somma dei 24 weekend. La policy è una scelta applicativa
-dimostrativa e non viene presentata come formula prescritta dalla relazione.
+`PunteggioTotale`. La policy è una scelta applicativa dimostrativa e non viene
+presentata come formula prescritta dalla relazione.
 
 ## Weekend terminato ed elaborabile
 

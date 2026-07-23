@@ -1,12 +1,12 @@
 -- Popolamento completo per test funzionali e di volume.
 --
 -- Lo script rispecchia la stima della relazione:
---   5 edizioni, 40 piloti, 100 iscrizioni pilota,
---   15 scuderie, 50 iscrizioni scuderia,
---   30 Gran Premi, 120 weekend,
---   1001 utenti, 1500 team, 200 leghe,
---   6000 componenti, 1500 partecipazioni,
---   2400 prestazioni e 36000 risultati team.
+--   5 edizioni, 40 piloti, 98 iscrizioni pilota,
+--   15 scuderie, 49 iscrizioni scuderia,
+--   30 Gran Premi, 118 weekend,
+--   1001 utenti, 1502 team, 201 leghe,
+--   6008 componenti, 1501 partecipazioni,
+--   2280 prestazioni e 34840 risultati team.
 --
 -- Nomi di piloti, scuderie, Gran Premi e circuiti sono usati per rendere
 -- leggibile il dataset. Calendari, schieramenti e risultati sono invece
@@ -47,6 +47,11 @@ SET FOREIGN_KEY_CHECKS = @OLD_FOREIGN_KEY_CHECKS;
 DROP TEMPORARY TABLE IF EXISTS _SEED_NUMERO;
 DROP TEMPORARY TABLE IF EXISTS _SEED_NOME;
 DROP TEMPORARY TABLE IF EXISTS _SEED_COGNOME;
+DROP TEMPORARY TABLE IF EXISTS _SEED_POSIZIONE_1;
+DROP TEMPORARY TABLE IF EXISTS _SEED_POSIZIONE_2;
+DROP TEMPORARY TABLE IF EXISTS _SEED_POSIZIONE_3;
+DROP TEMPORARY TABLE IF EXISTS _SEED_POSIZIONE_4;
+DROP TEMPORARY TABLE IF EXISTS _SEED_ROSA;
 CREATE TEMPORARY TABLE _SEED_NUMERO (
     N INT UNSIGNED NOT NULL,
     CONSTRAINT PK_SEED_NUMERO PRIMARY KEY (N)
@@ -76,6 +81,26 @@ CROSS JOIN (
     SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9
 ) AS M
 WHERE U.N + 10 * D.N + 100 * C.N + 1000 * M.N < 1500;
+
+-- MySQL non consente di riaprire più volte la stessa tabella temporanea
+-- all'interno di una query. Queste quattro copie 1..20 servono a enumerare
+-- le combinazioni distinte di piloti usate per le rose.
+CREATE TEMPORARY TABLE _SEED_POSIZIONE_1 (
+    N INT UNSIGNED NOT NULL PRIMARY KEY
+);
+CREATE TEMPORARY TABLE _SEED_POSIZIONE_2 (
+    N INT UNSIGNED NOT NULL PRIMARY KEY
+);
+CREATE TEMPORARY TABLE _SEED_POSIZIONE_3 (
+    N INT UNSIGNED NOT NULL PRIMARY KEY
+);
+CREATE TEMPORARY TABLE _SEED_POSIZIONE_4 (
+    N INT UNSIGNED NOT NULL PRIMARY KEY
+);
+INSERT INTO _SEED_POSIZIONE_1 SELECT N FROM _SEED_NUMERO WHERE N <= 20;
+INSERT INTO _SEED_POSIZIONE_2 SELECT N FROM _SEED_NUMERO WHERE N <= 20;
+INSERT INTO _SEED_POSIZIONE_3 SELECT N FROM _SEED_NUMERO WHERE N <= 20;
+INSERT INTO _SEED_POSIZIONE_4 SELECT N FROM _SEED_NUMERO WHERE N <= 20;
 
 -- Vocabolari anagrafici: il prodotto cartesiano 25 x 40 genera mille utenti
 -- uniformi, leggibili e tutti distinti.
@@ -168,8 +193,8 @@ VALUES
 
 START TRANSACTION;
 
--- Cinque edizioni complete e concluse, così anche tutti i weekend della
--- stagione più recente risultano consultabili ed elaborabili.
+-- Le edizioni 2021-2024 sono complete. Il 2025 resta intenzionalmente
+-- incompleto per provare il popolamento progressivo dalla modalità admin.
 INSERT INTO EDIZIONE (IdEdizione, NumeroEdizione, Anno)
 VALUES
     (1, 1, 2021),
@@ -339,9 +364,8 @@ VALUES (
     '3476334034'
 );
 
--- Ventiquattro weekend per edizione. Il calendario 2025 usa i GP 1..24;
--- risalendo nel tempo la finestra si sposta di tre GP per stagione. In questo
--- modo i weekend condividono le stesse anagrafiche quando il GP ricorre.
+-- Ventiquattro weekend per le edizioni concluse e ventidue per il 2025.
+-- Risalendo nel tempo la finestra si sposta di tre GP per stagione.
 INSERT INTO WEEKEND_DI_GARA (
     IdEdizione,
     IdGranPremio,
@@ -363,13 +387,12 @@ SELECT
     )
 FROM EDIZIONE AS E
 JOIN _SEED_NUMERO AS NUM
-    ON NUM.N <= 24
+    ON NUM.N <= CASE WHEN E.IdEdizione = 5 THEN 22 ELSE 24 END
 JOIN GRAN_PREMIO AS G
     ON G.IdGranPremio =
         MOD((5 - E.IdEdizione) * 3 + NUM.N - 1, 30) + 1;
 
--- Dieci scuderie per edizione. La stagione 2025 usa le prime dieci; ogni
--- stagione precedente sposta la finestra di due scuderie.
+-- Dieci scuderie nelle edizioni concluse e nove nel 2025.
 INSERT INTO SCUDERIA_ISCRITTA (
     IdEdizione,
     IdScuderia,
@@ -383,12 +406,13 @@ SELECT
     CONCAT('F1-', E.Anno, '-', LPAD(S.IdScuderia, 2, '0'))
 FROM EDIZIONE AS E
 JOIN _SEED_NUMERO AS NUM
-    ON NUM.N <= 10
+    ON NUM.N <= CASE WHEN E.IdEdizione = 5 THEN 9 ELSE 10 END
 JOIN SCUDERIA AS S
     ON S.IdScuderia =
         MOD((5 - E.IdEdizione) * 2 + NUM.N - 1, 15) + 1;
 
--- Venti piloti per edizione e due piloti per ciascuna scuderia iscritta.
+-- Venti piloti per edizione conclusa e diciotto nel 2025, sempre due per
+-- ciascuna scuderia iscritta.
 -- Le finestre adiacenti condividono 15 piloti: la ricorrenza è intenzionale
 -- e permette di verificare correttamente lo storico.
 INSERT INTO PILOTA_ISCRITTO (
@@ -424,7 +448,7 @@ SELECT
     ) + 1
 FROM EDIZIONE AS E
 JOIN _SEED_NUMERO AS NUM
-    ON NUM.N <= 20
+    ON NUM.N <= CASE WHEN E.IdEdizione = 5 THEN 18 ELSE 20 END
 JOIN PILOTA AS P
     ON P.IdPilota = (5 - E.IdEdizione) * 5 + NUM.N;
 
@@ -486,6 +510,18 @@ FROM (
 JOIN EDIZIONE AS E
     ON E.IdEdizione = DATI.IdEdizione;
 
+-- Due team espliciti dell'account manuale "max" nell'edizione 2025.
+INSERT INTO TEAM_FANTASY (
+    IdTeam,
+    Nome,
+    PunteggioTotale,
+    IdUtente,
+    IdEdizione
+)
+VALUES
+    (1501, 'TeamProva1', 0, 1001, 5),
+    (1502, 'TeamProva2', 0, 1001, 5);
+
 -- Quaranta leghe per edizione, tutte nominate secondo le convenzioni
 -- "Trofeo <tema>" o "Campionato <tema>" e amministrate da utenti differenti.
 INSERT INTO LEGA (
@@ -527,9 +563,80 @@ FROM (
 JOIN EDIZIONE AS E
     ON E.IdEdizione = DATI.IdEdizione;
 
+-- Lega di prova amministrata dall'account manuale "max".
+INSERT INTO LEGA (IdLega, Nome, IdUtente, IdEdizione)
+VALUES (201, 'LegaProva1', 1001, 5);
+
 -- Quattro piloti distinti e iscritti alla corretta edizione per ogni team.
--- Le rose scorrono sullo stesso insieme stagionale: uno stesso pilota può
--- quindi appartenere a più team fantasy senza introdurre eccezioni nominali.
+-- Le 300 rose di volume sono combinazioni tutte diverse, ordinate tramite
+-- hash deterministico: il seed è ripetibile ma evita i blocchi di team
+-- identici prodotti dalla precedente rotazione di sole venti rose.
+CREATE TEMPORARY TABLE _SEED_ROSA (
+    IdEdizione INT UNSIGNED NOT NULL,
+    Ordinale INT UNSIGNED NOT NULL,
+    P1 INT UNSIGNED NOT NULL,
+    P2 INT UNSIGNED NOT NULL,
+    P3 INT UNSIGNED NOT NULL,
+    P4 INT UNSIGNED NOT NULL,
+    PRIMARY KEY (IdEdizione, Ordinale)
+);
+
+INSERT INTO _SEED_ROSA (
+    IdEdizione,
+    Ordinale,
+    P1,
+    P2,
+    P3,
+    P4
+)
+SELECT
+    COMBINAZIONE.IdEdizione,
+    ROW_NUMBER() OVER (
+        PARTITION BY COMBINAZIONE.IdEdizione
+        ORDER BY SHA2(
+            CONCAT(
+                COMBINAZIONE.IdEdizione, '-',
+                COMBINAZIONE.P1, '-',
+                COMBINAZIONE.P2, '-',
+                COMBINAZIONE.P3, '-',
+                COMBINAZIONE.P4, '-rosa'
+            ),
+            256
+        )
+    ) AS Ordinale,
+    COMBINAZIONE.P1,
+    COMBINAZIONE.P2,
+    COMBINAZIONE.P3,
+    COMBINAZIONE.P4
+FROM (
+    SELECT
+        E.IdEdizione,
+        P1.N AS P1,
+        P2.N AS P2,
+        P3.N AS P3,
+        P4.N AS P4
+    FROM EDIZIONE AS E
+    JOIN _SEED_POSIZIONE_1 AS P1
+        ON P1.N <= CASE
+            WHEN E.IdEdizione = 5 THEN 18 ELSE 20
+        END
+    JOIN _SEED_POSIZIONE_2 AS P2
+        ON P2.N > P1.N
+        AND P2.N <= CASE
+            WHEN E.IdEdizione = 5 THEN 18 ELSE 20
+        END
+    JOIN _SEED_POSIZIONE_3 AS P3
+        ON P3.N > P2.N
+        AND P3.N <= CASE
+            WHEN E.IdEdizione = 5 THEN 18 ELSE 20
+        END
+    JOIN _SEED_POSIZIONE_4 AS P4
+        ON P4.N > P3.N
+        AND P4.N <= CASE
+            WHEN E.IdEdizione = 5 THEN 18 ELSE 20
+        END
+) AS COMBINAZIONE;
+
 INSERT INTO COMPOSIZIONE_TEAM (
     IdEdizione,
     IdPilota,
@@ -540,20 +647,40 @@ SELECT
     PI.IdPilota,
     TF.IdTeam
 FROM TEAM_FANTASY AS TF
+JOIN _SEED_ROSA AS ROSA
+    ON ROSA.IdEdizione = TF.IdEdizione
+    AND ROSA.Ordinale = MOD(TF.IdTeam - 1, 300) + 1
 JOIN _SEED_NUMERO AS POS
     ON POS.N <= 4
 JOIN PILOTA_ISCRITTO AS PI
     ON PI.IdEdizione = TF.IdEdizione
     AND PI.IdPilota =
         (5 - TF.IdEdizione) * 5
-        + MOD(
-            (MOD(TF.IdTeam - 1, 300)) * 3 + POS.N - 1,
-            20
-        ) + 1;
+        + CASE POS.N
+            WHEN 1 THEN ROSA.P1
+            WHEN 2 THEN ROSA.P2
+            WHEN 3 THEN ROSA.P3
+            WHEN 4 THEN ROSA.P4
+        END
+WHERE TF.IdTeam <= 1500;
 
--- Tutte le 20 prestazioni di tutti i 24 weekend di tutte le edizioni.
--- Qualifica e gara sono permutazioni 1..20; penalizzazioni e giri veloci
--- variano deterministicamente. PunteggioFantasy applica la policy:
+-- Rose leggibili e differenti per i due team manuali di Max.
+INSERT INTO COMPOSIZIONE_TEAM (IdEdizione, IdPilota, IdTeam)
+VALUES
+    (5, 1, 1501),
+    (5, 5, 1501),
+    (5, 9, 1501),
+    (5, 13, 1501),
+    (5, 2, 1502),
+    (5, 6, 1502),
+    (5, 10, 1502),
+    (5, 14, 1502);
+
+-- Tutte le prestazioni delle edizioni concluse. Per il 2025 sono compilati
+-- solo i primi venti dei ventidue weekend presenti: gli ultimi due restano
+-- senza risultati per il test manuale di A8. Qualifica e gara sono
+-- permutazioni pseudocasuali ma ripetibili, così i punteggi dei piloti e
+-- delle rose risultano distribuiti meglio. PunteggioFantasy applica la policy:
 -- max(0, 21 - gara) + max(0, 6 - qualifica)
 -- + 2 per il giro veloce - 5 in caso di penalizzazione.
 INSERT INTO PRESTAZIONE_WEEKEND (
@@ -580,40 +707,54 @@ SELECT
         - CASE WHEN DATI.Penalizzato THEN 5 ELSE 0 END
 FROM (
     SELECT
-        BASE.IdGranPremio,
-        BASE.IdEdizione,
-        BASE.IdPilota,
+        W.IdGranPremio,
+        W.IdEdizione,
+        PI.IdPilota,
+        ROW_NUMBER() OVER (
+            PARTITION BY W.IdEdizione, W.IdGranPremio
+            ORDER BY SHA2(
+                CONCAT(
+                    W.IdEdizione, '-',
+                    W.NumeroRound, '-',
+                    PI.IdPilota, '-qualifica'
+                ),
+                256
+            )
+        ) AS PosizioneQualifica,
+        ROW_NUMBER() OVER (
+            PARTITION BY W.IdEdizione, W.IdGranPremio
+            ORDER BY SHA2(
+                CONCAT(
+                    W.IdEdizione, '-',
+                    W.NumeroRound, '-',
+                    PI.IdPilota, '-gara'
+                ),
+                256
+            )
+        ) AS PosizioneGara,
         MOD(
-            BASE.PosizioneSeed - 1
-                + 3 * (BASE.NumeroRound - 1)
-                + BASE.IdEdizione - 1,
-            20
-        ) + 1 AS PosizioneQualifica,
-        MOD(
-            7 * (BASE.PosizioneSeed - 1)
-                + 5 * (BASE.NumeroRound - 1)
-                + 3 * (BASE.IdEdizione - 1),
-            20
-        ) + 1 AS PosizioneGara,
-        MOD(
-            BASE.PosizioneSeed + BASE.NumeroRound + BASE.IdEdizione,
+            CRC32(CONCAT(
+                W.IdEdizione, '-',
+                W.NumeroRound, '-',
+                PI.IdPilota, '-penalita'
+            )),
             17
         ) = 0 AS Penalizzato,
-        BASE.PosizioneSeed =
-            MOD(7 * BASE.NumeroRound + 3 * BASE.IdEdizione - 1, 20) + 1
-            AS GiroVeloce
-    FROM (
-        SELECT
-            W.IdGranPremio,
-            W.IdEdizione,
-            W.NumeroRound,
-            PI.IdPilota,
-            PI.IdPilota - ((5 - PI.IdEdizione) * 5)
-                AS PosizioneSeed
-        FROM WEEKEND_DI_GARA AS W
-        JOIN PILOTA_ISCRITTO AS PI
-            ON PI.IdEdizione = W.IdEdizione
-    ) AS BASE
+        ROW_NUMBER() OVER (
+            PARTITION BY W.IdEdizione, W.IdGranPremio
+            ORDER BY SHA2(
+                CONCAT(
+                    W.IdEdizione, '-',
+                    W.NumeroRound, '-',
+                    PI.IdPilota, '-giro-veloce'
+                ),
+                256
+            )
+        ) = 1 AS GiroVeloce
+    FROM WEEKEND_DI_GARA AS W
+    JOIN PILOTA_ISCRITTO AS PI
+        ON PI.IdEdizione = W.IdEdizione
+    WHERE W.IdEdizione <> 5 OR W.NumeroRound <= 20
 ) AS DATI;
 
 -- Trecento partecipazioni per edizione (1500 totali):
@@ -627,7 +768,8 @@ SELECT
         + MOD(MOD(TF.IdTeam - 1, 300), 40) + 1,
     TF.IdTeam
 FROM TEAM_FANTASY AS TF
-WHERE MOD(TF.IdTeam - 1, 300) + 1 <= 240
+WHERE TF.IdTeam <= 1500
+  AND MOD(TF.IdTeam - 1, 300) + 1 <= 240
 
 UNION ALL
 
@@ -636,10 +778,15 @@ SELECT
         + MOD(MOD(TF.IdTeam - 1, 300) + 1, 40) + 1,
     TF.IdTeam
 FROM TEAM_FANTASY AS TF
-WHERE MOD(TF.IdTeam - 1, 300) + 1 <= 60;
+WHERE TF.IdTeam <= 1500
+  AND MOD(TF.IdTeam - 1, 300) + 1 <= 60;
 
--- O2: un risultato per ciascuno dei 1500 team in ciascuno dei 24 weekend
--- della relativa edizione (36000 risultati coerenti con i quattro piloti).
+-- TeamProva2 partecipa alla lega creata da Max; TeamProva1 resta libero.
+INSERT INTO PARTECIPAZIONE_TEAM (IdLega, IdTeam)
+VALUES (201, 1502);
+
+-- O2: risultati completi per 24 weekend nelle edizioni 2021-2024 e per i
+-- primi 20 weekend del 2025, inclusi i due team manuali di Max.
 INSERT INTO RISULTATO_TEAM (
     IdEdizione,
     IdGranPremio,
@@ -683,6 +830,11 @@ COMMIT;
 
 DROP TEMPORARY TABLE _SEED_COGNOME;
 DROP TEMPORARY TABLE _SEED_NOME;
+DROP TEMPORARY TABLE _SEED_ROSA;
+DROP TEMPORARY TABLE _SEED_POSIZIONE_4;
+DROP TEMPORARY TABLE _SEED_POSIZIONE_3;
+DROP TEMPORARY TABLE _SEED_POSIZIONE_2;
+DROP TEMPORARY TABLE _SEED_POSIZIONE_1;
 DROP TEMPORARY TABLE _SEED_NUMERO;
 
 -- Riepilogo dei volumi: deve coincidere con la stima della relazione.
@@ -702,8 +854,8 @@ SELECT
     (SELECT COUNT(*) FROM PRESTAZIONE_WEEKEND) AS Prestazioni,
     (SELECT COUNT(*) FROM RISULTATO_TEAM) AS RisultatiTeam;
 
--- Completezza per edizione: ogni riga deve mostrare rispettivamente
--- 24, 10, 20, 300, 40, 1200, 300, 480 e 7200.
+-- Completezza per edizione. Il 2025 mostra intenzionalmente
+-- 22 weekend, 9 scuderie, 18 piloti e risultati per soli 20 GP.
 SELECT
     E.Anno,
     (SELECT COUNT(*)

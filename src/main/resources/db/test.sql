@@ -65,8 +65,8 @@ ORDER BY TF.Nome, P.Cognome, P.Nome;
 
 
 -- U5 - Leghe disponibili per l'edizione.
--- Atteso dal seed: 40 leghe; Trofeo Apex è amministrata da
--- alessandro.rossi.
+-- Atteso dal seed: 41 leghe, inclusa LegaProva1; Trofeo Apex è amministrata
+-- da alessandro.rossi.
 SELECT
     L.IdLega,
     L.Nome,
@@ -99,8 +99,8 @@ ORDER BY L.Nome, TF.Nome;
 
 
 -- U8 - Dettaglio dei punteggi di un team in un weekend terminato.
--- Atteso dal seed: quattro righe (VER, PER, HAM e RUS) con punteggi coerenti
--- con posizione, penalizzazione e giro veloce.
+-- Atteso dal seed: quattro righe, con punteggi coerenti con posizione,
+-- penalizzazione e giro veloce.
 SELECT
     TF.IdTeam,
     TF.Nome AS NomeTeam,

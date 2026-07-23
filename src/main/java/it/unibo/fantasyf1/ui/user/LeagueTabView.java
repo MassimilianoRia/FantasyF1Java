@@ -9,12 +9,14 @@ import it.unibo.fantasyf1.service.ApplicationServices;
 
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.SplitPane;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
@@ -36,21 +38,26 @@ final class LeagueTabView {
     private final BiConsumer<String, Boolean> status;
 
     private final VBox root = new VBox(10);
+    private final TabPane tabs = new TabPane();
+    private final Tab availableTab = new Tab("Leghe disponibili");
     private final ListView<LegaDisponibile> availableLeagues =
         new ListView<>();
-    private final ComboBox<LegaDisponibile> joinLeague = new ComboBox<>();
+    private final Label selectedLeagueTitle =
+        new Label("Seleziona una lega");
+    private final Label selectedLeagueDetail = new Label(
+        "Clicca una lega per vedere subito team iscritti e classifica."
+    );
     private final ComboBox<TeamSummary> joinTeam = new ComboBox<>();
     private final Button join = new Button("Iscrivi team");
     private final TextField leagueName = new TextField();
     private final Button createLeague = new Button("Crea lega");
     private final ListView<JoinedLeague> joinedLeagues = new ListView<>();
-    private final ComboBox<LegaDisponibile> standingsLeague =
-        new ComboBox<>();
-    private final Button loadStandings = new Button("Mostra classifica");
+    private final ListView<LegaDisponibile> ownedLeagues = new ListView<>();
     private final ListView<StandingRow> standings = new ListView<>();
 
     private Edizione edition;
     private long generation;
+    private Integer leagueToOpenAfterRefresh;
 
     LeagueTabView(
         final ApplicationServices services,
@@ -62,17 +69,15 @@ final class LeagueTabView {
         this.status = status;
         configureControls();
 
-        final Tab available =
-            new Tab("Leghe disponibili", createAvailableLeagues());
+        availableTab.setContent(createAvailableLeagues());
         final Tab creation = new Tab("Crea lega", createLeagueForm());
-        final Tab joined = new Tab("Le mie partecipazioni", createJoined());
-        final Tab ranking = new Tab("Classifica", createStandings());
-        available.setClosable(false);
-        creation.setClosable(false);
-        joined.setClosable(false);
-        ranking.setClosable(false);
-        final TabPane tabs =
-            new TabPane(available, creation, joined, ranking);
+        final Tab joined =
+            new Tab("Le mie partecipazioni", createJoined());
+        final Tab owned = new Tab("Le mie leghe", createOwned());
+        for (Tab tab : List.of(availableTab, creation, joined, owned)) {
+            tab.setClosable(false);
+        }
+        tabs.getTabs().addAll(availableTab, creation, joined, owned);
         VBox.setVgrow(tabs, Priority.ALWAYS);
         root.getChildren().add(tabs);
         root.setPadding(new Insets(10, 0, 0, 0));
@@ -98,20 +103,15 @@ final class LeagueTabView {
         joinedLeagues.setPlaceholder(
             new Label("Nessun tuo team partecipa a una lega")
         );
+        ownedLeagues.setPlaceholder(
+            new Label("Non hai ancora creato leghe nell'edizione")
+        );
         standings.setPlaceholder(
-            new Label("Seleziona una lega per consultarne la classifica")
+            new Label("La lega non contiene ancora team")
         );
 
         UserViewSupport.renderList(
             availableLeagues,
-            LeagueTabView::leagueText
-        );
-        UserViewSupport.renderCombo(
-            joinLeague,
-            LeagueTabView::leagueText
-        );
-        UserViewSupport.renderCombo(
-            standingsLeague,
             LeagueTabView::leagueText
         );
         UserViewSupport.renderCombo(
@@ -127,6 +127,10 @@ final class LeagueTabView {
                 joined.leagueName(),
                 joined.teamName()
             )
+        );
+        UserViewSupport.renderList(
+            ownedLeagues,
+            LeagueTabView::leagueText
         );
         standings.setCellFactory(ignored -> new ListCell<>() {
             @Override
@@ -150,55 +154,77 @@ final class LeagueTabView {
             }
         });
 
+        availableLeagues.getSelectionModel()
+            .selectedItemProperty()
+            .addListener(
+                (observable, previous, selected) -> showLeague(selected)
+            );
+        joinedLeagues.getSelectionModel()
+            .selectedItemProperty()
+            .addListener((observable, previous, selected) -> {
+                if (selected != null) {
+                    openLeague(selected.leagueId());
+                    joinedLeagues.getSelectionModel().clearSelection();
+                }
+            });
+        ownedLeagues.getSelectionModel()
+            .selectedItemProperty()
+            .addListener((observable, previous, selected) -> {
+                if (selected != null) {
+                    openLeague(selected.id());
+                    ownedLeagues.getSelectionModel().clearSelection();
+                }
+            });
         leagueName.textProperty().addListener(
             (observable, previous, current) -> updateCreateAvailability()
-        );
-        joinLeague.valueProperty().addListener(
-            (observable, previous, current) -> updateJoinAvailability()
         );
         joinTeam.valueProperty().addListener(
             (observable, previous, current) -> updateJoinAvailability()
         );
-        standingsLeague.valueProperty().addListener(
-            (observable, previous, current) ->
-                updateStandingsAvailability()
-        );
 
         createLeague.setOnAction(event -> createLeague());
-        join.setOnAction(event -> joinLeague());
-        loadStandings.setOnAction(event -> loadStandings());
+        join.setOnAction(event -> joinSelectedLeague());
+        selectedLeagueTitle.setStyle(
+            "-fx-font-size: 18px; -fx-font-weight: bold;"
+        );
+        selectedLeagueDetail.setWrapText(true);
         updateCreateAvailability();
         updateJoinAvailability();
-        updateStandingsAvailability();
     }
 
     private Node createAvailableLeagues() {
-        joinLeague.setPromptText("Lega");
-        joinLeague.setPrefWidth(330);
-        joinTeam.setPromptText("Uno dei tuoi team");
+        final Button refresh = new Button("Aggiorna leghe");
+        refresh.setOnAction(event -> refresh());
+        final VBox leagueList = new VBox(
+            8,
+            new Label("Leghe dell'edizione"),
+            availableLeagues,
+            refresh
+        );
+        VBox.setVgrow(availableLeagues, Priority.ALWAYS);
+
+        joinTeam.setPromptText("Scegli uno dei tuoi team");
         joinTeam.setPrefWidth(300);
-        final HBox actions = new HBox(
+        final HBox enrollment = new HBox(
             10,
-            new Label("Lega"),
-            joinLeague,
             new Label("Team"),
             joinTeam,
             join
         );
-        final Button refresh = new Button("Aggiorna leghe");
-        refresh.setOnAction(event -> refresh());
-        final VBox content = new VBox(
+        final VBox details = new VBox(
             10,
-            new Label(
-                "Leghe dell'edizione selezionata e relativa "
-                    + "amministrazione."
-            ),
-            availableLeagues,
-            actions,
-            refresh
+            selectedLeagueTitle,
+            selectedLeagueDetail,
+            new Label("Classifica e team iscritti"),
+            standings,
+            enrollment
         );
-        VBox.setVgrow(availableLeagues, Priority.ALWAYS);
-        return padded(content);
+        VBox.setVgrow(standings, Priority.ALWAYS);
+
+        final SplitPane split = new SplitPane(leagueList, details);
+        split.setOrientation(Orientation.HORIZONTAL);
+        split.setDividerPositions(0.37);
+        return padded(split);
     }
 
     private Node createLeagueForm() {
@@ -214,7 +240,7 @@ final class LeagueTabView {
             12,
             new Label(
                 "Creando la lega ne diventerai l'amministratore. "
-                    + "Potrai comunque partecipare con un tuo team."
+                    + "La ritroverai sempre nella sezione “Le mie leghe”."
             ),
             form
         ));
@@ -223,11 +249,14 @@ final class LeagueTabView {
     private Node createJoined() {
         final Button refresh = new Button("Aggiorna partecipazioni");
         refresh.setOnAction(event -> refresh());
+        final Label instructions = new Label(
+            "Clicca una partecipazione per entrare nella lega e aprirne "
+                + "automaticamente la classifica."
+        );
+        instructions.setWrapText(true);
         final VBox content = new VBox(
             10,
-            new Label(
-                "Leghe a cui partecipano i tuoi team nell'edizione."
-            ),
+            instructions,
             joinedLeagues,
             refresh
         );
@@ -235,24 +264,21 @@ final class LeagueTabView {
         return padded(content);
     }
 
-    private Node createStandings() {
-        standingsLeague.setPromptText("Lega");
-        standingsLeague.setPrefWidth(360);
-        final HBox filters = new HBox(
-            10,
-            new Label("Lega"),
-            standingsLeague,
-            loadStandings
+    private Node createOwned() {
+        final Button refresh = new Button("Aggiorna le mie leghe");
+        refresh.setOnAction(event -> refresh());
+        final Label instructions = new Label(
+            "Le leghe che amministri. Clicca una riga per aprirne "
+                + "classifica e partecipanti."
         );
+        instructions.setWrapText(true);
         final VBox content = new VBox(
             10,
-            new Label(
-                "Classifica ordinata per punti totali e nome del team."
-            ),
-            filters,
-            standings
+            instructions,
+            ownedLeagues,
+            refresh
         );
-        VBox.setVgrow(standings, Priority.ALWAYS);
+        VBox.setVgrow(ownedLeagues, Priority.ALWAYS);
         return padded(content);
     }
 
@@ -261,6 +287,12 @@ final class LeagueTabView {
         if (requestedEdition == null) {
             return;
         }
+        final LegaDisponibile selected =
+            availableLeagues.getSelectionModel().getSelectedItem();
+        final Integer selectedLeagueId = leagueToOpenAfterRefresh != null
+            ? leagueToOpenAfterRefresh
+            : selected == null ? null : selected.id();
+        leagueToOpenAfterRefresh = null;
         final long requestedGeneration = ++generation;
         status.accept("Caricamento delle leghe…", false);
         tasks.run(
@@ -268,18 +300,21 @@ final class LeagueTabView {
             () -> new LeagueData(
                 services.leagues().availableLeagues(requestedEdition.id()),
                 services.leagues().joinedLeagues(requestedEdition.id()),
+                services.leagues().myLeagues(requestedEdition.id()),
                 services.teams().myTeams(requestedEdition.id())
             ),
             data -> {
                 if (!isCurrent(requestedEdition, requestedGeneration)) {
                     return;
                 }
-                applyData(data);
+                applyData(data, selectedLeagueId);
                 status.accept(
-                    "%d leghe disponibili, %d partecipazioni personali."
+                    ("%d leghe disponibili, %d partecipazioni, "
+                        + "%d leghe amministrate.")
                         .formatted(
                             data.available().size(),
-                            data.joined().size()
+                            data.joined().size(),
+                            data.owned().size()
                         ),
                     false
                 );
@@ -309,7 +344,7 @@ final class LeagueTabView {
                 requestedName,
                 requestedEdition.id()
             ),
-            ignoredId -> {
+            createdId -> {
                 status.accept(
                     "Lega '%s' creata correttamente."
                         .formatted(requestedName.trim()),
@@ -317,7 +352,7 @@ final class LeagueTabView {
                 );
                 if (edition != null && edition.id() == requestedEdition.id()) {
                     leagueName.clear();
-                    refresh();
+                    refreshAndOpen(createdId);
                 }
             },
             failure -> status.accept(
@@ -327,9 +362,10 @@ final class LeagueTabView {
         );
     }
 
-    private void joinLeague() {
+    private void joinSelectedLeague() {
         final Edizione requestedEdition = edition;
-        final LegaDisponibile requestedLeague = joinLeague.getValue();
+        final LegaDisponibile requestedLeague =
+            availableLeagues.getSelectionModel().getSelectedItem();
         final TeamSummary requestedTeam = joinTeam.getValue();
         if (
             requestedEdition == null
@@ -358,7 +394,7 @@ final class LeagueTabView {
                     false
                 );
                 if (edition != null && edition.id() == requestedEdition.id()) {
-                    refresh();
+                    refreshAndOpen(requestedLeague.id());
                 }
             },
             failure -> status.accept(
@@ -368,24 +404,64 @@ final class LeagueTabView {
         );
     }
 
-    private void loadStandings() {
-        final Edizione requestedEdition = edition;
-        final LegaDisponibile requestedLeague = standingsLeague.getValue();
-        if (requestedEdition == null || requestedLeague == null) {
+    private void refreshAndOpen(final int leagueId) {
+        leagueToOpenAfterRefresh = leagueId;
+        refresh();
+    }
+
+    private void showLeague(final LegaDisponibile league) {
+        standings.getItems().clear();
+        if (league == null) {
+            selectedLeagueTitle.setText("Seleziona una lega");
+            selectedLeagueDetail.setText(
+                "Clicca una lega per vedere subito team iscritti "
+                    + "e classifica."
+            );
+            updateJoinAvailability();
             return;
         }
-        status.accept("Caricamento della classifica…", false);
+        selectedLeagueTitle.setText(league.nome());
+        final JoinedLeague participation = joinedLeagues.getItems().stream()
+            .filter(joined -> joined.leagueId() == league.id())
+            .findFirst()
+            .orElse(null);
+        selectedLeagueDetail.setText(
+            participation == null
+                ? "Amministratore: %s. Puoi iscrivere uno dei tuoi team."
+                    .formatted(league.usernameAmministratore())
+                : "Amministratore: %s. Partecipi con il team “%s”."
+                    .formatted(
+                        league.usernameAmministratore(),
+                        participation.teamName()
+                    )
+        );
+        updateJoinAvailability();
+        loadStandings(league);
+    }
+
+    private void loadStandings(final LegaDisponibile requestedLeague) {
+        final Edizione requestedEdition = edition;
+        final long requestedGeneration = generation;
+        if (requestedEdition == null) {
+            return;
+        }
+        standings.setPlaceholder(new Label("Caricamento classifica…"));
         tasks.run(
-            root,
+            standings,
             () -> services.leagues().standings(
                 requestedLeague.id(),
                 requestedEdition.id()
             ),
             rows -> {
-                if (edition != null
-                    && edition.id() == requestedEdition.id()) {
+                if (
+                    isCurrent(requestedEdition, requestedGeneration)
+                        && isSelected(requestedLeague.id())
+                ) {
                     standings.setItems(
                         FXCollections.observableArrayList(rows)
+                    );
+                    standings.setPlaceholder(
+                        new Label("La lega non contiene ancora team")
                     );
                     status.accept(
                         rows.isEmpty()
@@ -397,23 +473,52 @@ final class LeagueTabView {
                 }
             },
             failure -> {
-                standings.getItems().clear();
-                status.accept(
-                    UserViewSupport.errorMessage(failure),
-                    true
-                );
+                if (isSelected(requestedLeague.id())) {
+                    standings.getItems().clear();
+                    standings.setPlaceholder(
+                        new Label("Classifica non disponibile")
+                    );
+                    status.accept(
+                        UserViewSupport.errorMessage(failure),
+                        true
+                    );
+                }
             }
         );
     }
 
-    private void applyData(final LeagueData data) {
+    private void openLeague(final int leagueId) {
+        final LegaDisponibile league = findAvailableLeague(leagueId);
+        if (league == null) {
+            return;
+        }
+        tabs.getSelectionModel().select(availableTab);
+        if (isSelected(leagueId)) {
+            showLeague(league);
+        } else {
+            availableLeagues.getSelectionModel().select(league);
+        }
+        availableLeagues.scrollTo(league);
+    }
+
+    private LegaDisponibile findAvailableLeague(final int leagueId) {
+        return availableLeagues.getItems().stream()
+            .filter(league -> league.id() == leagueId)
+            .findFirst()
+            .orElse(null);
+    }
+
+    private boolean isSelected(final int leagueId) {
+        final LegaDisponibile selected =
+            availableLeagues.getSelectionModel().getSelectedItem();
+        return selected != null && selected.id() == leagueId;
+    }
+
+    private void applyData(
+        final LeagueData data,
+        final Integer preferredLeagueId
+    ) {
         availableLeagues.setItems(
-            FXCollections.observableArrayList(data.available())
-        );
-        joinLeague.setItems(
-            FXCollections.observableArrayList(data.available())
-        );
-        standingsLeague.setItems(
             FXCollections.observableArrayList(data.available())
         );
         joinTeam.setItems(
@@ -422,30 +527,38 @@ final class LeagueTabView {
         joinedLeagues.setItems(
             FXCollections.observableArrayList(data.joined())
         );
+        ownedLeagues.setItems(
+            FXCollections.observableArrayList(data.owned())
+        );
         standings.getItems().clear();
 
-        if (!data.available().isEmpty()) {
-            joinLeague.getSelectionModel().selectFirst();
-            standingsLeague.getSelectionModel().selectFirst();
+        final LegaDisponibile preferred = preferredLeagueId == null
+            ? null
+            : findAvailableLeague(preferredLeagueId);
+        if (preferred != null) {
+            availableLeagues.getSelectionModel().select(preferred);
+        } else if (!data.available().isEmpty()) {
+            availableLeagues.getSelectionModel().selectFirst();
         }
         if (!data.teams().isEmpty()) {
             joinTeam.getSelectionModel().selectFirst();
         }
         updateCreateAvailability();
         updateJoinAvailability();
-        updateStandingsAvailability();
     }
 
     private void clearData() {
         availableLeagues.getItems().clear();
-        joinLeague.getItems().clear();
-        standingsLeague.getItems().clear();
         joinTeam.getItems().clear();
         joinedLeagues.getItems().clear();
+        ownedLeagues.getItems().clear();
         standings.getItems().clear();
+        selectedLeagueTitle.setText("Seleziona una lega");
+        selectedLeagueDetail.setText(
+            "Clicca una lega per vedere subito team iscritti e classifica."
+        );
         updateCreateAvailability();
         updateJoinAvailability();
-        updateStandingsAvailability();
     }
 
     private void updateCreateAvailability() {
@@ -457,16 +570,18 @@ final class LeagueTabView {
     }
 
     private void updateJoinAvailability() {
+        final LegaDisponibile selected =
+            availableLeagues.getSelectionModel().getSelectedItem();
+        final boolean alreadyJoined = selected != null
+            && joinedLeagues.getItems().stream()
+                .anyMatch(joined -> joined.leagueId() == selected.id());
+        joinTeam.setDisable(edition == null || selected == null
+            || alreadyJoined);
         join.setDisable(
             edition == null
-                || joinLeague.getValue() == null
+                || selected == null
                 || joinTeam.getValue() == null
-        );
-    }
-
-    private void updateStandingsAvailability() {
-        loadStandings.setDisable(
-            edition == null || standingsLeague.getValue() == null
+                || alreadyJoined
         );
     }
 
@@ -495,12 +610,14 @@ final class LeagueTabView {
     private record LeagueData(
         List<LegaDisponibile> available,
         List<JoinedLeague> joined,
+        List<LegaDisponibile> owned,
         List<TeamSummary> teams
     ) {
 
         LeagueData {
             available = List.copyOf(available);
             joined = List.copyOf(joined);
+            owned = List.copyOf(owned);
             teams = List.copyOf(teams);
         }
     }
