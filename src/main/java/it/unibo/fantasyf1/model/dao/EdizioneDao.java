@@ -22,10 +22,24 @@ public final class EdizioneDao {
         """;
 
     public List<Edizione> findAll() throws SQLException {
+        try (Connection connection = DatabaseConnection.open()) {
+            return findAll(connection);
+        }
+    }
+
+    /**
+     * Variante utilizzabile dai service all'interno di una connessione già
+     * aperta. Il DAO non esegue commit e non chiude la connessione ricevuta.
+     *
+     * @param connection connessione del chiamante
+     * @return edizioni dalla più recente
+     * @throws SQLException in caso di errore JDBC
+     */
+    public List<Edizione> findAll(final Connection connection)
+        throws SQLException {
         final List<Edizione> editions = new ArrayList<>();
 
         try (
-            Connection connection = DatabaseConnection.open();
             PreparedStatement statement = connection.prepareStatement(FIND_ALL);
             ResultSet result = statement.executeQuery()
         ) {
@@ -37,7 +51,6 @@ public final class EdizioneDao {
                 ));
             }
         }
-
         return List.copyOf(editions);
     }
 }

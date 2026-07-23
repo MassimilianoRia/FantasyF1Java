@@ -9,4 +9,12 @@ public record LegaDisponibile(
     int idAmministratore,
     String usernameAmministratore
 ) {
+
+    @Override
+    public String toString() {
+        return "%s — amministratore: %s".formatted(
+            nome,
+            usernameAmministratore
+        );
+    }
 }

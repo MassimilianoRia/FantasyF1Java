@@ -1,3 +1,6 @@
+-- ATTENZIONE: questo script cancella tutti i dati di fantasy_f1 con TRUNCATE.
+-- TRUNCATE esegue commit impliciti e non è annullabile con ROLLBACK.
+-- Non eseguirlo su database condivisi, di sviluppo con dati utili o di produzione.
 USE fantasy_f1;
 
 -- Svuota tutte le tabelle mantenendo invariata la struttura del database.

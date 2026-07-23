@@ -41,7 +41,8 @@ VALUES ('McLaren Racing');
 SET @id_scuderia_mclaren = LAST_INSERT_ID();
 
 -- UTENTE
--- Le password dimostrative sono memorizzate come hash SHA-256, non in chiaro.
+-- Gli account dimostrativi conservano intenzionalmente hash SHA-256 legacy.
+-- Al primo login valido l'applicazione li migra al formato adattivo e salato.
 INSERT INTO UTENTE (Nome, Cognome, Username, PasswordHash, Email, Telefono)
 VALUES (
     'Mario',
@@ -103,11 +104,11 @@ VALUES (
 
 -- TEAM_FANTASY
 INSERT INTO TEAM_FANTASY (Nome, PunteggioTotale, IdUtente, IdEdizione)
-VALUES ('Pole Position Club', 70, @id_utente_mario, @id_edizione);
+VALUES ('Pole Position Club', 90, @id_utente_mario, @id_edizione);
 SET @id_team_mario = LAST_INSERT_ID();
 
 INSERT INTO TEAM_FANTASY (Nome, PunteggioTotale, IdUtente, IdEdizione)
-VALUES ('Box Box Racing', 0, @id_utente_giulia, @id_edizione);
+VALUES ('Box Box Racing', 90, @id_utente_giulia, @id_edizione);
 SET @id_team_giulia = LAST_INSERT_ID();
 
 -- LEGA
@@ -176,15 +177,23 @@ VALUES (
     @id_scuderia_mclaren
 );
 
--- COMPOSIZIONE_TEAM: il primo team contiene tutti e quattro i piloti.
+-- COMPOSIZIONE_TEAM: ogni team nasce completo con quattro piloti distinti.
+-- I piloti possono appartenere a più team fantasy.
 INSERT INTO COMPOSIZIONE_TEAM (IdEdizione, IdPilota, IdTeam)
 VALUES
     (@id_edizione, @id_pilota_leclerc, @id_team_mario),
     (@id_edizione, @id_pilota_hamilton, @id_team_mario),
     (@id_edizione, @id_pilota_norris, @id_team_mario),
-    (@id_edizione, @id_pilota_piastri, @id_team_mario);
+    (@id_edizione, @id_pilota_piastri, @id_team_mario),
+    (@id_edizione, @id_pilota_leclerc, @id_team_giulia),
+    (@id_edizione, @id_pilota_hamilton, @id_team_giulia),
+    (@id_edizione, @id_pilota_norris, @id_team_giulia),
+    (@id_edizione, @id_pilota_piastri, @id_team_giulia);
 
 -- PRESTAZIONE_WEEKEND
+-- Policy demo:
+-- max(0, 21 - posizione gara) + max(0, 6 - posizione qualifica)
+-- + 2 per il giro veloce - 5 in caso di penalizzazione.
 INSERT INTO PRESTAZIONE_WEEKEND (
     IdGranPremio,
     IdEdizione,
@@ -196,10 +205,10 @@ INSERT INTO PRESTAZIONE_WEEKEND (
     PunteggioFantasy
 )
 VALUES
-    (@id_gran_premio, @id_edizione, @id_pilota_leclerc, 1, 1, FALSE, TRUE, 25),
-    (@id_gran_premio, @id_edizione, @id_pilota_norris, 2, 2, FALSE, FALSE, 18),
-    (@id_gran_premio, @id_edizione, @id_pilota_piastri, 3, 3, FALSE, FALSE, 15),
-    (@id_gran_premio, @id_edizione, @id_pilota_hamilton, 4, 4, FALSE, FALSE, 12);
+    (@id_gran_premio, @id_edizione, @id_pilota_leclerc, 1, 1, FALSE, TRUE, 27),
+    (@id_gran_premio, @id_edizione, @id_pilota_norris, 2, 2, FALSE, FALSE, 23),
+    (@id_gran_premio, @id_edizione, @id_pilota_piastri, 3, 3, FALSE, FALSE, 21),
+    (@id_gran_premio, @id_edizione, @id_pilota_hamilton, 4, 4, FALSE, FALSE, 19);
 
 -- PARTECIPAZIONE_TEAM: entrambi i team partecipano alla lega.
 INSERT INTO PARTECIPAZIONE_TEAM (IdLega, IdTeam)
@@ -215,8 +224,8 @@ INSERT INTO RISULTATO_TEAM (
     PunteggioWeekend
 )
 VALUES
-    (@id_edizione, @id_gran_premio, @id_team_mario, 70),
-    (@id_edizione, @id_gran_premio, @id_team_giulia, 0);
+    (@id_edizione, @id_gran_premio, @id_team_mario, 90),
+    (@id_edizione, @id_gran_premio, @id_team_giulia, 90);
 
 COMMIT;
 
@@ -232,7 +241,7 @@ SELECT
     (SELECT COUNT(*) FROM UTENTE) AS Utenti,
     (SELECT COUNT(*) FROM TEAM_FANTASY) AS TeamFantasy,
     (SELECT COUNT(*) FROM LEGA) AS Leghe,
-    (SELECT COUNT(*) FROM COMPOSIZIONE_TEAM) AS PilotiNelPrimoTeam,
+    (SELECT COUNT(*) FROM COMPOSIZIONE_TEAM) AS ComposizioniTeam,
     (SELECT COUNT(*) FROM PARTECIPAZIONE_TEAM) AS Partecipazioni,
     (SELECT COUNT(*) FROM PRESTAZIONE_WEEKEND) AS Prestazioni,
     (SELECT COUNT(*) FROM RISULTATO_TEAM) AS RisultatiTeam;

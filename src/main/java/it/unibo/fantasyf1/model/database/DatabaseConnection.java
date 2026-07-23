@@ -31,4 +31,14 @@ public final class DatabaseConnection {
         DriverManager.setLoginTimeout(LOGIN_TIMEOUT_SECONDS);
         return DriverManager.getConnection(config.url(), properties);
     }
+
+    /**
+     * Restituisce il provider predefinito, iniettabile nei service e nei
+     * componenti transazionali.
+     *
+     * @return provider delle connessioni configurate
+     */
+    public static ConnectionProvider provider() {
+        return DatabaseConnection::open;
+    }
 }
