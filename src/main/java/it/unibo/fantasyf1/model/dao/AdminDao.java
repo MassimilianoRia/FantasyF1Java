@@ -939,6 +939,7 @@ public final class AdminDao {
             statement.setInt(2, grandPrixId);
             try (ResultSet result = statement.executeQuery()) {
                 while (result.next()) {
+                    result.getInt("IdPrestazione");
                     final boolean recorded = !result.wasNull();
                     statuses.add(new WeekendPerformanceStatus(
                         result.getInt("IdEdizione"),

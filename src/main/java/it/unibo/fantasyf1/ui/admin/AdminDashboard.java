@@ -135,11 +135,11 @@ public final class AdminDashboard {
         "Il pilota ha registrato il giro veloce"
     );
     private final Button concludeWeekendButton =
-        new Button("Convalida e concludi weekend");
+        new Button("Concludi weekend");
     private final Button reopenWeekendButton =
         new Button("Riapri weekend");
     private final Button recordPerformanceButton =
-        new Button("Registra / correggi prestazione");
+        new Button("Registra prestazione");
     private final ListView<RaceWeekend> editionWeekendList =
         new ListView<>();
     private final ListView<GrandPrixOption> availableGrandPrixList =
