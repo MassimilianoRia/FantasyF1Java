@@ -69,6 +69,12 @@ public final class ResultDao {
         WHERE IdEdizione = ? AND IdGranPremio = ?
         """;
 
+    private static final String CLEAR_WEEKEND_FANTASY_SCORES = """
+        UPDATE PRESTAZIONE_WEEKEND
+        SET PunteggioFantasy = NULL
+        WHERE IdEdizione = ? AND IdGranPremio = ?
+        """;
+
     private static final String UPSERT_WEEKEND_RESULTS = """
         INSERT INTO RISULTATO_TEAM
             (IdEdizione, IdGranPremio, IdTeam, PunteggioWeekend)
@@ -256,6 +262,19 @@ public final class ResultDao {
     ) throws SQLException {
         try (PreparedStatement statement =
                  connection.prepareStatement(DELETE_WEEKEND_RESULTS)) {
+            statement.setInt(1, editionId);
+            statement.setInt(2, grandPrixId);
+            statement.executeUpdate();
+        }
+    }
+
+    public void clearWeekendFantasyScores(
+        final Connection connection,
+        final int editionId,
+        final int grandPrixId
+    ) throws SQLException {
+        try (PreparedStatement statement =
+                 connection.prepareStatement(CLEAR_WEEKEND_FANTASY_SCORES)) {
             statement.setInt(1, editionId);
             statement.setInt(2, grandPrixId);
             statement.executeUpdate();

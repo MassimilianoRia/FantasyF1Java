@@ -66,8 +66,8 @@ sul database di sviluppo se non è stato prima dimostrato che i dati siano
 eliminabili.
 
 `test.sql` è invece non distruttivo. Dopo il seed esegue soltanto `SET` e
-`SELECT` per mostrare U3, U5, U7, U8, U9 e verificare lo stato A9, O1, O2,
-O3 e le principali invarianti dei dati dimostrativi.
+`SELECT` per mostrare U3, U5, U7, U8, U9 e verificare lo stato A9/A10, O1,
+O2, O3 e le principali invarianti dei dati dimostrativi.
 
 Gli script di produzione sono specifici per MySQL e non devono essere eseguiti
 direttamente su H2 o su un database di test casuale: contengono istruzioni
@@ -144,7 +144,42 @@ annulla l'intera operazione, incluso il cambio di stato.
 O1 e O2 includono un controllo SQL su `Concluso = TRUE`; O3 somma
 esclusivamente `RISULTATO_TEAM` collegati a weekend conclusi. U8 applica lo
 stesso filtro e l'interfaccia utente presenta i punteggi come disponibili solo
-dopo A9. Non è prevista un'operazione di riapertura.
+dopo A9.
+
+A10 è un'operazione amministrativa eccezionale per rettifiche sportive
+successive alla convalida. È disponibile soltanto su un weekend concluso e,
+nella stessa transazione JDBC:
+
+1. imposta `Concluso = FALSE`;
+2. porta a `NULL` tutti i relativi `PunteggioFantasy`;
+3. elimina i relativi `RISULTATO_TEAM`;
+4. ricalcola a zero o alla somma dei soli risultati conclusi il
+   `PunteggioTotale` di ogni team dell'edizione.
+
+Le righe di `PRESTAZIONE_WEEKEND` e i risultati sportivi restano intatti.
+Riaperto il weekend, A8 può correggerli mantenendo il punteggio fantasy nullo;
+una nuova A9 verifica nuovamente la completezza e rigenera O1-O3. La
+cancellazione preventiva dei risultati rende il ciclo
+conclusione → riapertura → nuova conclusione privo di duplicati. Errori in
+qualunque fase di A10 causano il rollback anche del cambio di stato.
+
+Le query applicative A10 sono `PreparedStatement` nei DAO e sono equivalenti a:
+
+```sql
+UPDATE WEEKEND_DI_GARA
+SET Concluso = FALSE
+WHERE IdEdizione = ? AND IdGranPremio = ? AND Concluso = TRUE;
+
+UPDATE PRESTAZIONE_WEEKEND
+SET PunteggioFantasy = NULL
+WHERE IdEdizione = ? AND IdGranPremio = ?;
+
+DELETE FROM RISULTATO_TEAM
+WHERE IdEdizione = ? AND IdGranPremio = ?;
+```
+
+Il ricalcolo O3 già esistente aggiorna tutti i team dell'edizione usando
+`COALESCE(SUM(...), 0)` e considera soltanto weekend con `Concluso = TRUE`.
 
 L'edizione selezionata inizialmente è quella con l'anno più recente. L'utente
 può cambiarla per consultare o provare anche le edizioni storiche.

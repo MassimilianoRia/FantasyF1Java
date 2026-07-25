@@ -50,17 +50,27 @@ public final class TransactionManager {
         Objects.requireNonNull(operation, "L'operazione non può essere null");
 
         try (Connection connection = connectionProvider.open()) {
+            final boolean originalAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
+            Throwable operationFailure = null;
             try {
                 final T result = operation.apply(connection);
                 connection.commit();
                 return result;
             } catch (SQLException exception) {
+                operationFailure = exception;
                 rollback(connection, exception);
                 throw SqlExceptionMapper.map(exception);
             } catch (RuntimeException exception) {
+                operationFailure = exception;
                 rollback(connection, exception);
                 throw exception;
+            } finally {
+                restoreAutoCommit(
+                    connection,
+                    originalAutoCommit,
+                    operationFailure
+                );
             }
         } catch (SQLException exception) {
             throw SqlExceptionMapper.map(exception);
@@ -90,6 +100,22 @@ public final class TransactionManager {
             connection.rollback();
         } catch (SQLException rollbackFailure) {
             originalFailure.addSuppressed(rollbackFailure);
+        }
+    }
+
+    private static void restoreAutoCommit(
+        final Connection connection,
+        final boolean originalAutoCommit,
+        final Throwable originalFailure
+    ) {
+        try {
+            connection.setAutoCommit(originalAutoCommit);
+        } catch (SQLException restoreFailure) {
+            if (originalFailure != null) {
+                originalFailure.addSuppressed(restoreFailure);
+            } else {
+                throw SqlExceptionMapper.map(restoreFailure);
+            }
         }
     }
 

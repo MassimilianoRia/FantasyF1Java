@@ -318,6 +318,13 @@ public final class AdminService {
         processing.concludeWeekend(editionId, grandPrixId);
     }
 
+    public void reopenWeekend(
+        final int editionId,
+        final int grandPrixId
+    ) {
+        processing.reopenWeekend(editionId, grandPrixId);
+    }
+
     public List<Edizione> editions() {
         return transactions.query(editions::findAll);
     }

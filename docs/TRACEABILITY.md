@@ -37,7 +37,8 @@ soltanto nella schermata iniziale comune e non appartiene alla sessione utente.
 | A6 | §1.5.2 p. 7; query p. 34 | Inserire pilota anagrafico | ASSENTE | PK, tipi/data | validazione persona/data | `AdminService.createDriver`, `AdminDao` | inserimento; campi/date invalidi |
 | A7 | §1.5.2 p. 7; query p. 34 | Iscrivere pilota con sigla, numero e scuderia della stessa edizione | ASSENTE | FK composita; UNIQUE sigla/numero | lock edizione, massimo 20 e massimo 2/scuderia, sigla 3, range numero | `AdminService.enrollDriver`, `AdminDao` | limiti 20/2; scuderia altra edizione; sigla/numero duplicati |
 | A8 | §1.5.2 p. 7; §3.3.7 p. 21; query p. 38 | Registrare/correggere una prestazione solo a weekend aperto, invalidando il punteggio | ASSENTE | PK/FK; CHECK posizioni | lock e filtro SQL `Concluso = FALSE`; stessa edizione; `PunteggioFantasy = NULL`; nessun risultato parziale | `WeekendProcessingService.recordPerformance`, `AdminDao`, `AdminDashboard` | inserimento aperto; correzione aperta; modifica concluso respinta; nessun O1 anticipato |
-| A9 | §1.5.2 p. 7; query p. 38 | Convalidare prestazioni complete e concludere irreversibilmente il weekend | ASSENTE | `Concluso NOT NULL DEFAULT FALSE` | lock edizione/weekend; conteggio piloti/prestazioni; UPDATE condizionale; transazione unica A9→O1→O2→O3 | `WeekendProcessingService.concludeWeekend`, `AdminDao`, `AdminDashboard` | incompleto/non trovato/già concluso; data irrilevante; rollback totale; esito valido |
+| A9 | §1.5.2 p. 7; query p. 38 | Convalidare prestazioni complete e concludere il weekend | ASSENTE | `Concluso NOT NULL DEFAULT FALSE` | lock edizione/weekend; conteggio piloti/prestazioni; UPDATE condizionale; transazione unica A9→O1→O2→O3 | `WeekendProcessingService.concludeWeekend`, `AdminDao`, `AdminDashboard` | incompleto/non trovato/già concluso; data irrilevante; rollback totale; riconclusione valida |
+| A10 | requisito di rettifica allegato | Riaprire eccezionalmente un weekend concluso invalidando soltanto i dati fantasy derivati | ASSENTE | PK/FK esistenti; nessuna nuova struttura | lock edizione/weekend; UPDATE condizionale a `FALSE`; score a `NULL`; DELETE risultati; O3 in unica transazione | `WeekendProcessingService.reopenWeekend`, `AdminDao.reopenWeekend`, `ResultDao`, `AdminDashboard` | successo; aperto/inesistente; prestazioni intatte e modificabili; zero team; rollback; riconclusione senza duplicati; assente nella UI utente |
 
 ## Operazioni automatiche
 
@@ -57,7 +58,7 @@ soltanto nella schermata iniziale comune e non appartiene alla sessione utente.
 | Completezza progressiva | §2.4 pp. 11–12; figure E/R | FK/PK; nessun conteggio aggregato | limiti massimi durante insert; stato completa solo 24/10/20 e 2 per scuderia | limiti e stato incompleta/completa |
 | Team esattamente quattro e mai parziale | §1.2 pp. 3–4; §2.4 pp. 11–12 | PK/FK permettono 0–N persistenti | un solo service transazionale; DAO non esposto alla UI | rollback e cardinalità |
 | U6 concorrente | query p. 32 insufficiente da sola | PK solo coppia lega/team | transazione `SELECT ... FOR UPDATE` su lega, team e partecipazioni in ordine | due richieste concorrenti: una sola partecipazione per proprietario |
-| Conclusione amministrativa | §1.2 p. 4; A8/A9 pp. 7–8; O1–O3 p. 8 | prima dedotta da data/punteggi | `Concluso` esplicito; A8 solo `FALSE`; A9 verifica una prestazione per pilota e passa a `TRUE`; nessuna riapertura; date solo anagrafiche | data futura concludibile; data passata non sufficiente; mancante respinta; doppia conclusione respinta |
+| Stato amministrativo del weekend | §1.2 p. 4; A8/A9 pp. 7–8; requisito A10; O1–O3 p. 8 | prima dedotta da data/punteggi | `Concluso` esplicito; A8 solo `FALSE`; A9 passa a `TRUE`; A10 riporta a `FALSE` e invalida i derivati; date solo anagrafiche | conclusione, riapertura, modifica, riconclusione; casi negativi e rollback |
 | JDBC e transazioni | query pp. 30–36 | prepared statement nei 2 DAO; ogni DAO apre connessione; UI chiama DAO sul FX thread | DAO con `Connection` fornita; try-with-resources; commit/rollback; mapping errori | rollback fault injection; query parametrizzate; test service |
 | UI reattiva e navigazione | capitolo 4 p. 37 vuoto; requisiti allegati | singola schermata U5 sincrona | scelta iniziale Utente/Admin con pulsanti affiancati; login/registrazione; dashboard a tab; selezione edizione persistente; `Task`; unico entry point | smoke dell'applicazione unificata; nessun pulsante stub/ID tecnico |
 | Errori uniformi | requisito allegato | messaggio DB generico + stderr | eccezioni dominio tipizzate e mapper SQL; alert comprensibili, niente stack trace UI | duplicate/not found/validation/connection distinti |
@@ -81,6 +82,9 @@ soltanto nella schermata iniziale comune e non appartiene alla sessione utente.
 4. `Concluso` è il solo indicatore di convalida. A9 verifica il numero di
    prestazioni rispetto ai piloti iscritti e, nella stessa transazione che
    imposta il flag, esegue O1, O2 e O3. `DataFine` non interviene nel flusso.
+5. A10 è eccezionale e non crea uno storico: conserva le prestazioni sportive,
+   annulla punteggi e risultati fantasy derivati e riallinea O3. La successiva
+   A9 rigenera i dati con la strategia delete/reinsert già idempotente.
 
 ## Esito finale della checklist
 
@@ -104,6 +108,7 @@ soltanto nella schermata iniziale comune e non appartiene alla sessione utente.
 | A7 | VERIFICATO | lock edizione, limiti 20/2 e FK stagionale, tab A7 | `AdminLimitsH2Test`, `AdminCrudH2Test` |
 | A8 | VERIFICATO | upsert solo aperto e invalidazione punteggio in `WeekendProcessingService`/`AdminDao`, tab A8/A9 | `WeekendProcessingH2Test` |
 | A9 | VERIFICATO | lock, completezza, UPDATE condizionale e sequenza atomica O1–O3 | `WeekendProcessingH2Test` |
+| A10 | VERIFICATO | riapertura condizionale e invalidazione atomica dei derivati; conferma nella sola dashboard trusted | `WeekendProcessingH2Test`, `ApplicationAccessTest` |
 | O1 | VERIFICATO | `ScoringPolicy` isolata; SELECT e UPDATE solo su weekend concluso | `SimpleScoringPolicyTest`, `WeekendProcessingH2Test` |
 | O2 | VERIFICATO | join `Concluso = TRUE` e quattro score | `WeekendProcessingH2Test` |
 | O3 | VERIFICATO | somma con join ai soli weekend conclusi, zero in assenza | `WeekendProcessingH2Test` |

@@ -133,6 +133,14 @@ public final class AdminDao {
           AND Concluso = FALSE
         """;
 
+    private static final String REOPEN_WEEKEND = """
+        UPDATE WEEKEND_DI_GARA
+        SET Concluso = FALSE
+        WHERE IdEdizione = ?
+          AND IdGranPremio = ?
+          AND Concluso = TRUE
+        """;
+
     private static final String FIND_GRAND_PRIX = """
         SELECT IdGranPremio, Nome, Circuito, Nazione, `Città`
         FROM GRAN_PREMIO
@@ -567,6 +575,19 @@ public final class AdminDao {
     ) throws SQLException {
         try (PreparedStatement statement =
                  connection.prepareStatement(CONCLUDE_WEEKEND)) {
+            statement.setInt(1, editionId);
+            statement.setInt(2, grandPrixId);
+            return statement.executeUpdate();
+        }
+    }
+
+    public int reopenWeekend(
+        final Connection connection,
+        final int editionId,
+        final int grandPrixId
+    ) throws SQLException {
+        try (PreparedStatement statement =
+                 connection.prepareStatement(REOPEN_WEEKEND)) {
             statement.setInt(1, editionId);
             statement.setInt(2, grandPrixId);
             return statement.executeUpdate();

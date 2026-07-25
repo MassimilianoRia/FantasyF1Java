@@ -179,12 +179,6 @@ final class EditionTabView {
     private void applyOverview(final EditionOverview overview) {
         final EditionStatus state = overview.status();
         title.setText(overview.edition().toString());
-        final int missingWeekends = Math.max(0, 24 - state.weekends());
-        final int missingConstructors = Math.max(
-            0,
-            10 - state.constructors()
-        );
-        final int missingDrivers = Math.max(0, 20 - state.drivers());
         summary.setText(
             state.complete()
                 ? "Edizione completamente popolata: 24 GP, 10 scuderie "

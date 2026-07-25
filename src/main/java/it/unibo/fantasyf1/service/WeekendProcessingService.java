@@ -188,6 +188,60 @@ public final class WeekendProcessingService {
         });
     }
 
+    /**
+     * A10 riapre eccezionalmente un weekend e invalida tutti i dati fantasy
+     * derivati, mantenendo intatti i risultati sportivi ufficiali.
+     */
+    public void reopenWeekend(
+        final int editionId,
+        final int grandPrixId
+    ) {
+        if (editionId <= 0 || grandPrixId <= 0) {
+            throw ServiceGuards.invalid(
+                "Seleziona un'edizione e un weekend validi."
+            );
+        }
+        transactions.inTransaction(connection -> {
+            if (!admin.lockEdition(connection, editionId)) {
+                throw ServiceGuards.notFound("Edizione non trovata.");
+            }
+            final boolean concluded = admin.lockWeekendConclusion(
+                connection,
+                editionId,
+                grandPrixId
+            ).orElseThrow(() -> ServiceGuards.notFound(
+                "Weekend non trovato."
+            ));
+            if (!concluded) {
+                throw ServiceGuards.conflict(
+                    "Il weekend è già aperto."
+                );
+            }
+
+            if (admin.reopenWeekend(
+                connection,
+                editionId,
+                grandPrixId
+            ) != 1) {
+                throw ServiceGuards.conflict(
+                    "Il weekend non è stato riaperto perché il suo stato "
+                        + "è cambiato."
+                );
+            }
+            results.clearWeekendFantasyScores(
+                connection,
+                editionId,
+                grandPrixId
+            );
+            results.clearWeekendResults(
+                connection,
+                editionId,
+                grandPrixId
+            );
+            results.recalculateEditionTotals(connection, editionId);
+        });
+    }
+
     private static void validatePosition(
         final Integer position,
         final String label

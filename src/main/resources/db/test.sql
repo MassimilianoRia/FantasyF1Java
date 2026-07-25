@@ -340,3 +340,29 @@ JOIN TEAM_FANTASY AS TF
     ON TF.IdTeam = PT.IdTeam
 GROUP BY PT.IdLega, TF.IdUtente
 HAVING COUNT(*) > 1;
+
+-- A10 - Nessun weekend aperto conserva dati fantasy derivati validi.
+-- Dopo una riapertura entrambe le query devono continuare a restituire zero.
+SELECT
+    W.IdEdizione,
+    W.IdGranPremio,
+    COUNT(PW.PunteggioFantasy) AS PunteggiFantasyResidui
+FROM WEEKEND_DI_GARA AS W
+JOIN PRESTAZIONE_WEEKEND AS PW
+    ON PW.IdEdizione = W.IdEdizione
+    AND PW.IdGranPremio = W.IdGranPremio
+WHERE W.Concluso = FALSE
+GROUP BY W.IdEdizione, W.IdGranPremio
+HAVING COUNT(PW.PunteggioFantasy) > 0;
+
+SELECT
+    W.IdEdizione,
+    W.IdGranPremio,
+    COUNT(RT.IdTeam) AS RisultatiTeamResidui
+FROM WEEKEND_DI_GARA AS W
+JOIN RISULTATO_TEAM AS RT
+    ON RT.IdEdizione = W.IdEdizione
+    AND RT.IdGranPremio = W.IdGranPremio
+WHERE W.Concluso = FALSE
+GROUP BY W.IdEdizione, W.IdGranPremio
+HAVING COUNT(RT.IdTeam) > 0;

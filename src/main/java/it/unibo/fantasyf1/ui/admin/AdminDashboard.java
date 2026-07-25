@@ -25,6 +25,7 @@ import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
@@ -143,6 +144,8 @@ public final class AdminDashboard {
     );
     private final Button concludeWeekendButton =
         new Button("Convalida e concludi weekend");
+    private final Button reopenWeekendButton =
+        new Button("Riapri weekend");
     private final Button recordPerformanceButton =
         new Button("Registra / correggi prestazione");
     private final Label weekendResultStatusLabel = new Label(
@@ -363,6 +366,12 @@ public final class AdminDashboard {
                 .or(editionCombo.valueProperty().isNull())
                 .or(performanceWeekendCombo.valueProperty().isNull())
                 .or(selectedWeekendConcluded)
+        );
+        reopenWeekendButton.disableProperty().bind(
+            busy
+                .or(editionCombo.valueProperty().isNull())
+                .or(performanceWeekendCombo.valueProperty().isNull())
+                .or(selectedWeekendConcluded.not())
         );
         recordPerformanceButton.disableProperty().bind(
             busy
@@ -778,6 +787,7 @@ public final class AdminDashboard {
 
         recordPerformanceButton.setOnAction(event -> recordPerformance());
         concludeWeekendButton.setOnAction(event -> concludeWeekend());
+        reopenWeekendButton.setOnAction(event -> reopenWeekend());
 
         weekendResultStatusLabel.setWrapText(true);
         weekendResultStatusLabel.setStyle(
@@ -785,14 +795,20 @@ public final class AdminDashboard {
         );
         final VBox actions = new VBox(
             10,
-            new HBox(10, recordPerformanceButton, concludeWeekendButton),
+            new HBox(
+                10,
+                recordPerformanceButton,
+                concludeWeekendButton,
+                reopenWeekendButton
+            ),
             weekendResultStatusLabel
         );
         return formPage(
-            "A8/A9 — Risultati ufficiali e conclusione",
+            "A8/A9/A10 — Risultati ufficiali e stato del weekend",
             "A8 registra o corregge prestazioni finché il weekend è aperto. "
                 + "A9 convalida un set completo, conclude il weekend ed "
-                + "esegue atomicamente O1-O3.",
+                + "esegue atomicamente O1-O3. A10 consente la riapertura "
+                + "eccezionale per rettifiche sportive.",
             form,
             actions
         );
@@ -1181,6 +1197,49 @@ public final class AdminDashboard {
         }
     }
 
+    private void reopenWeekend() {
+        try {
+            final Edizione edition = requireSelection(
+                editionCombo,
+                "Seleziona un'edizione."
+            );
+            final RaceWeekend weekend = requireSelection(
+                performanceWeekendCombo,
+                "Seleziona un weekend."
+            );
+            if (!confirmReopening(weekend)) {
+                return;
+            }
+            executeMutation(
+                "riapertura-weekend",
+                "Riapertura e invalidazione dei dati fantasy in corso…",
+                () -> {
+                    admin.reopenWeekend(
+                        edition.id(),
+                        weekend.grandPrixId()
+                    );
+                    return Boolean.TRUE;
+                },
+                ignored -> {
+                    weekendResultStatusLabel.setText(
+                        "Weekend riaperto: prestazioni modificabili; "
+                            + "punteggi fantasy e risultati team invalidati."
+                    );
+                    confirm(
+                        "Weekend riaperto. Correggi le prestazioni e "
+                            + "concludilo nuovamente per ricalcolare i punti."
+                    );
+                    refreshAll(
+                        edition.id(),
+                        "Riapertura A10 completata e classifiche aggiornate."
+                    );
+                }
+            );
+        } catch (RuntimeException exception) {
+            showInputError(exception);
+        }
+    }
+
     private void refreshAll(
         final Integer preferredEditionId,
         final String successMessage
@@ -1469,7 +1528,8 @@ public final class AdminDashboard {
         } else if (weekend.concluded()) {
             weekendResultStatusLabel.setText(
                 "Weekend concluso: le prestazioni sono bloccate e i "
-                    + "punteggi fantasy sono definitivi."
+                    + "punteggi fantasy sono definitivi. Puoi riaprirlo "
+                    + "eccezionalmente per correggere i risultati ufficiali."
             );
         } else {
             weekendResultStatusLabel.setText(
@@ -1629,6 +1689,24 @@ public final class AdminDashboard {
             null,
             message
         );
+    }
+
+    private boolean confirmReopening(final RaceWeekend weekend) {
+        final Alert alert = new Alert(
+            Alert.AlertType.CONFIRMATION,
+            "I punteggi fantasy e i risultati dei team di "
+                + weekend.grandPrixName()
+                + " verranno invalidati. Le prestazioni sportive resteranno "
+                + "disponibili per la correzione.",
+            ButtonType.OK,
+            ButtonType.CANCEL
+        );
+        alert.setTitle("Conferma riapertura");
+        alert.setHeaderText("Riaprire il weekend concluso?");
+        if (root.getScene() != null && root.getScene().getWindow() != null) {
+            alert.initOwner(root.getScene().getWindow());
+        }
+        return alert.showAndWait().filter(ButtonType.OK::equals).isPresent();
     }
 
     private void showAlert(
