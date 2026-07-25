@@ -5,7 +5,7 @@
 --   15 scuderie, 50 iscrizioni scuderia,
 --   30 Gran Premi, 120 weekend,
 --   1001 utenti, 1502 team, 201 leghe,
---   6008 componenti, 1501 partecipazioni,
+--   6008 componenti, 1502 partecipazioni,
 --   2360 prestazioni e 35444 risultati team.
 --
 -- Nomi di piloti, scuderie, Gran Premi e circuiti sono usati per rendere
@@ -775,9 +775,11 @@ FROM TEAM_FANTASY AS TF
 WHERE TF.IdTeam <= 1500
   AND MOD(TF.IdTeam - 1, 300) + 1 <= 60;
 
--- TeamProva2 partecipa alla lega predefinita; TeamProva1 resta libero.
+-- TeamProva1 partecipa al Trofeo Horizon; TeamProva2 alla lega predefinita.
 INSERT INTO PARTECIPAZIONE_TEAM (IdLega, IdTeam)
-VALUES (201, 1502);
+VALUES
+    (162, 1501),
+    (201, 1502);
 
 -- O2: risultati completi per 24 weekend nelle edizioni 2021-2024 e per i
 -- primi 22 weekend del 2025, inclusi i due team dell'account predefinito.
