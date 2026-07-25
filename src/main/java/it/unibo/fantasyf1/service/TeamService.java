@@ -107,7 +107,7 @@ public final class TeamService {
 
             for (int grandPrixId :
                 results.findConcludedWeekendIds(connection, editionId)) {
-                results.upsertResultForTeam(
+                results.insertResultForTeam(
                     connection,
                     teamId,
                     editionId,

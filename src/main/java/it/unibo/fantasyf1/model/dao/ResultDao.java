@@ -64,18 +64,7 @@ public final class ResultDao {
         WHERE W.IdEdizione = ? AND W.IdGranPremio = ?
         """;
 
-    private static final String DELETE_WEEKEND_RESULTS = """
-        DELETE FROM RISULTATO_TEAM
-        WHERE IdEdizione = ? AND IdGranPremio = ?
-        """;
-
-    private static final String CLEAR_WEEKEND_FANTASY_SCORES = """
-        UPDATE PRESTAZIONE_WEEKEND
-        SET PunteggioFantasy = NULL
-        WHERE IdEdizione = ? AND IdGranPremio = ?
-        """;
-
-    private static final String UPSERT_WEEKEND_RESULTS = """
+    private static final String INSERT_WEEKEND_RESULTS = """
         INSERT INTO RISULTATO_TEAM
             (IdEdizione, IdGranPremio, IdTeam, PunteggioWeekend)
         SELECT
@@ -96,8 +85,6 @@ public final class ResultDao {
         GROUP BY CT.IdEdizione, CT.IdTeam
         HAVING COUNT(*) = 4
            AND COUNT(PW.PunteggioFantasy) = 4
-        ON DUPLICATE KEY UPDATE
-            PunteggioWeekend = VALUES(PunteggioWeekend)
         """;
 
     private static final String RECALCULATE_EDITION_TOTALS = """
@@ -137,7 +124,7 @@ public final class ResultDao {
         ORDER BY NumeroRound
         """;
 
-    private static final String UPSERT_SINGLE_TEAM_RESULT = """
+    private static final String INSERT_SINGLE_TEAM_RESULT = """
         INSERT INTO RISULTATO_TEAM
             (IdEdizione, IdGranPremio, IdTeam, PunteggioWeekend)
         SELECT
@@ -158,8 +145,6 @@ public final class ResultDao {
         GROUP BY CT.IdEdizione, CT.IdTeam
         HAVING COUNT(*) = 4
            AND COUNT(PW.PunteggioFantasy) = 4
-        ON DUPLICATE KEY UPDATE
-            PunteggioWeekend = VALUES(PunteggioWeekend)
         """;
 
     public List<PerformanceRow> findPerformances(
@@ -234,50 +219,18 @@ public final class ResultDao {
         }
     }
 
-    public void recalculateWeekendResults(
+    public void calculateWeekendResults(
         final Connection connection,
         final int editionId,
         final int grandPrixId
     ) throws SQLException {
-        try (PreparedStatement delete =
-                 connection.prepareStatement(DELETE_WEEKEND_RESULTS)) {
-            delete.setInt(1, editionId);
-            delete.setInt(2, grandPrixId);
-            delete.executeUpdate();
-        }
         try (PreparedStatement insert =
-                 connection.prepareStatement(UPSERT_WEEKEND_RESULTS)) {
+                 connection.prepareStatement(INSERT_WEEKEND_RESULTS)) {
             insert.setInt(1, grandPrixId);
             insert.setInt(2, grandPrixId);
             insert.setInt(3, grandPrixId);
             insert.setInt(4, editionId);
             insert.executeUpdate();
-        }
-    }
-
-    public void clearWeekendResults(
-        final Connection connection,
-        final int editionId,
-        final int grandPrixId
-    ) throws SQLException {
-        try (PreparedStatement statement =
-                 connection.prepareStatement(DELETE_WEEKEND_RESULTS)) {
-            statement.setInt(1, editionId);
-            statement.setInt(2, grandPrixId);
-            statement.executeUpdate();
-        }
-    }
-
-    public void clearWeekendFantasyScores(
-        final Connection connection,
-        final int editionId,
-        final int grandPrixId
-    ) throws SQLException {
-        try (PreparedStatement statement =
-                 connection.prepareStatement(CLEAR_WEEKEND_FANTASY_SCORES)) {
-            statement.setInt(1, editionId);
-            statement.setInt(2, grandPrixId);
-            statement.executeUpdate();
         }
     }
 
@@ -330,14 +283,14 @@ public final class ResultDao {
         return result.wasNull() ? null : value;
     }
 
-    public void upsertResultForTeam(
+    public void insertResultForTeam(
         final Connection connection,
         final int teamId,
         final int editionId,
         final int grandPrixId
     ) throws SQLException {
         try (PreparedStatement statement =
-                 connection.prepareStatement(UPSERT_SINGLE_TEAM_RESULT)) {
+                 connection.prepareStatement(INSERT_SINGLE_TEAM_RESULT)) {
             statement.setInt(1, grandPrixId);
             statement.setInt(2, grandPrixId);
             statement.setInt(3, grandPrixId);

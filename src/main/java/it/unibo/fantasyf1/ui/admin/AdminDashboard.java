@@ -132,8 +132,6 @@ public final class AdminDashboard {
     );
     private final Button concludeWeekendButton =
         new Button("Concludi weekend");
-    private final Button reopenWeekendButton =
-        new Button("Riapri weekend");
     private final Button recordPerformanceButton =
         new Button("Registra");
     private final ListView<RaceWeekend> editionWeekendList =
@@ -321,12 +319,6 @@ public final class AdminDashboard {
                 .or(editionCombo.valueProperty().isNull())
                 .or(performanceWeekendCombo.valueProperty().isNull())
                 .or(selectedWeekendConcluded)
-        );
-        reopenWeekendButton.disableProperty().bind(
-            busy
-                .or(editionCombo.valueProperty().isNull())
-                .or(performanceWeekendCombo.valueProperty().isNull())
-                .or(selectedWeekendConcluded.not())
         );
         recordPerformanceButton.disableProperty().bind(
             busy
@@ -703,19 +695,16 @@ public final class AdminDashboard {
 
         recordPerformanceButton.setOnAction(event -> recordPerformance());
         concludeWeekendButton.setOnAction(event -> concludeWeekend());
-        reopenWeekendButton.setOnAction(event -> reopenWeekend());
         recordPerformanceButton.getStyleClass().add("primary-button");
         concludeWeekendButton.getStyleClass().add("primary-button");
-        reopenWeekendButton.getStyleClass().add("danger-button");
 
         final HBox actions = new HBox(
             10,
             recordPerformanceButton,
-            concludeWeekendButton,
-            reopenWeekendButton
+            concludeWeekendButton
         );
         return formPage(
-            "A8/A9/A10 — Risultati ufficiali e stato del weekend",
+            "A8/A9 — Risultati ufficiali e stato del weekend",
             form,
             actions
         );
@@ -1047,38 +1036,6 @@ public final class AdminDashboard {
                         edition.id(),
                         "Weekend concluso. I punteggi fantasy sono ora "
                             + "disponibili."
-                    );
-                }
-            );
-        } catch (RuntimeException exception) {
-            showInputError(exception);
-        }
-    }
-
-    private void reopenWeekend() {
-        try {
-            final Edizione edition = requireSelection(
-                editionCombo,
-                "Seleziona un'edizione."
-            );
-            final RaceWeekend weekend = requireSelection(
-                performanceWeekendCombo,
-                "Seleziona un weekend."
-            );
-            executeMutation(
-                "riapertura-weekend",
-                "Riapertura e invalidazione dei dati fantasy in corso…",
-                () -> {
-                    admin.reopenWeekend(
-                        edition.id(),
-                        weekend.grandPrixId()
-                    );
-                    return Boolean.TRUE;
-                },
-                ignored -> {
-                    refreshAll(
-                        edition.id(),
-                        "Weekend riaperto correttamente."
                     );
                 }
             );

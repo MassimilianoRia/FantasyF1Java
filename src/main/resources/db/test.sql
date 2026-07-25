@@ -341,8 +341,8 @@ JOIN TEAM_FANTASY AS TF
 GROUP BY PT.IdLega, TF.IdUtente
 HAVING COUNT(*) > 1;
 
--- A10 - Nessun weekend aperto conserva dati fantasy derivati validi.
--- Dopo una riapertura entrambe le query devono continuare a restituire zero.
+-- O1/O2 - Nessun weekend aperto conserva dati fantasy derivati validi.
+-- Entrambe le query devono restituire zero.
 SELECT
     W.IdEdizione,
     W.IdGranPremio,
