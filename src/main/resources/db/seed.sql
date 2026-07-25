@@ -344,7 +344,7 @@ JOIN _SEED_COGNOME AS CG
 WHERE NUM.N <= 1000;
 
 -- Account dedicato ai test manuali dell'applicazione.
--- Credenziali: username "max", password "database".
+-- Credenziali: username "UtenteDefault", password "utentedefault".
 INSERT INTO UTENTE (
     IdUtente,
     Nome,
@@ -356,12 +356,12 @@ INSERT INTO UTENTE (
 )
 VALUES (
     1001,
-    'Massimiliano',
-    'Ria',
-    'max',
-    SHA2('database', 256),
-    'massi.ria23@gmail.com',
-    '3476334034'
+    'Utente',
+    'Default',
+    'UtenteDefault',
+    SHA2('utentedefault', 256),
+    'utente.default@example.test',
+    '+39 320 0001001'
 );
 
 -- Ventiquattro weekend conclusi per il 2021-2024. Nel 2025 i primi ventidue
@@ -512,7 +512,7 @@ FROM (
 JOIN EDIZIONE AS E
     ON E.IdEdizione = DATI.IdEdizione;
 
--- Due team espliciti dell'account manuale "max" nell'edizione 2025.
+-- Due team espliciti dell'account predefinito nell'edizione 2025.
 INSERT INTO TEAM_FANTASY (
     IdTeam,
     Nome,
@@ -565,7 +565,7 @@ FROM (
 JOIN EDIZIONE AS E
     ON E.IdEdizione = DATI.IdEdizione;
 
--- Lega di prova amministrata dall'account manuale "max".
+-- Lega di prova amministrata dall'account predefinito.
 INSERT INTO LEGA (IdLega, Nome, IdUtente, IdEdizione)
 VALUES (201, 'LegaProva1', 1001, 5);
 
@@ -658,7 +658,7 @@ JOIN PILOTA_ISCRITTO AS PI
         END
 WHERE TF.IdTeam <= 1500;
 
--- Rose leggibili e differenti per i due team manuali di Max.
+-- Rose leggibili e differenti per i due team dell'account predefinito.
 INSERT INTO COMPOSIZIONE_TEAM (IdEdizione, IdPilota, IdTeam)
 VALUES
     (5, 1, 1501),
@@ -775,12 +775,12 @@ FROM TEAM_FANTASY AS TF
 WHERE TF.IdTeam <= 1500
   AND MOD(TF.IdTeam - 1, 300) + 1 <= 60;
 
--- TeamProva2 partecipa alla lega creata da Max; TeamProva1 resta libero.
+-- TeamProva2 partecipa alla lega predefinita; TeamProva1 resta libero.
 INSERT INTO PARTECIPAZIONE_TEAM (IdLega, IdTeam)
 VALUES (201, 1502);
 
 -- O2: risultati completi per 24 weekend nelle edizioni 2021-2024 e per i
--- primi 22 weekend del 2025, inclusi i due team manuali di Max.
+-- primi 22 weekend del 2025, inclusi i due team dell'account predefinito.
 INSERT INTO RISULTATO_TEAM (
     IdEdizione,
     IdGranPremio,

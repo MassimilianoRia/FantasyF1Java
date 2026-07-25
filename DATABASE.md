@@ -85,7 +85,7 @@ account usano la stessa password iniziale:
 | `alessandro.rossi` | `fantasyf1-2025` |
 | `beatrice.rossi` | `fantasyf1-2025` |
 | `luca.ferri` | `fantasyf1-2025` |
-| `max` | `database` |
+| `UtenteDefault` | `utentedefault` |
 
 Solo per dimostrare la compatibilità con dati preesistenti, il seed memorizza
 gli hash SHA-256 legacy delle password. La password in chiaro non viene
@@ -101,8 +101,8 @@ I team sono denominati uniformemente combinando 30 identità racing con
 il primo partecipa a due leghe, mentre il secondo non è ancora iscritto e
 consente di provare U6 senza creare altri dati.
 
-L'account `max` possiede inoltre `TeamProva1`, `TeamProva2` e la lega
-`LegaProva1` nell'edizione 2025. `TeamProva2` è già iscritto a
+L'account `UtenteDefault` possiede inoltre `TeamProva1`, `TeamProva2` e
+la lega `LegaProva1` nell'edizione 2025. `TeamProva2` è già iscritto a
 `LegaProva1`, mentre `TeamProva1` resta disponibile per altre prove.
 Le rose generate per il volume sono combinazioni distinte e pseudo-casuali
 ma ripetibili, così le classifiche non raggruppano sistematicamente team con

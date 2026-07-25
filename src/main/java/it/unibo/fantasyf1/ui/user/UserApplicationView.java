@@ -33,6 +33,8 @@ public final class UserApplicationView implements AutoCloseable {
 
     private static final String ERROR_STYLE = "-fx-text-fill: #b00020;";
     private static final String SUCCESS_STYLE = "-fx-text-fill: #176b2c;";
+    private static final String TEST_USERNAME = "UtenteDefault";
+    private static final String TEST_PASSWORD = "utentedefault";
 
     private final Stage stage;
     private final ApplicationServices services;
@@ -78,11 +80,12 @@ public final class UserApplicationView implements AutoCloseable {
         loginPassword.setPromptText("Password");
         final Button loginButton = new Button("Accedi");
         loginButton.setDefaultButton(true);
+        final Button skipButton = new Button("Salta");
 
         final GridPane loginForm = formGrid();
         loginForm.addRow(0, new Label("Username"), loginUsername);
         loginForm.addRow(1, new Label("Password"), loginPassword);
-        loginForm.add(loginButton, 1, 2);
+        loginForm.add(new HBox(10, loginButton, skipButton), 1, 2);
 
         final TextField firstName = new TextField();
         final TextField lastName = new TextField();
@@ -124,28 +127,25 @@ public final class UserApplicationView implements AutoCloseable {
         authTabs.setPrefWidth(560);
 
         loginButton.setOnAction(event -> {
-            setStatus(status, "Accesso in corso…", false);
-            final String username = loginUsername.getText();
-            final String password = loginPassword.getText();
-            tasks.run(
+            login(
                 authTabs,
-                () -> services.authentication().login(username, password),
-                session -> {
-                    loginPassword.clear();
-                    if (active) {
-                        showDashboard(session);
-                    } else {
-                        services.authentication().logout();
-                    }
-                },
-                failure -> {
-                    loginPassword.clear();
-                    setStatus(
-                        status,
-                        UserViewSupport.errorMessage(failure),
-                        true
-                    );
-                }
+                status,
+                loginPassword,
+                loginUsername.getText(),
+                loginPassword.getText(),
+                "Accesso in corso…"
+            );
+        });
+
+        skipButton.setOnAction(event -> {
+            loginUsername.setText(TEST_USERNAME);
+            login(
+                authTabs,
+                status,
+                loginPassword,
+                TEST_USERNAME,
+                TEST_PASSWORD,
+                "Accesso rapido in corso…"
             );
         });
 
@@ -208,6 +208,37 @@ public final class UserApplicationView implements AutoCloseable {
         BorderPane.setAlignment(changeMode, Pos.CENTER_LEFT);
         stage.getScene().setRoot(root);
         loginUsername.requestFocus();
+    }
+
+    private void login(
+        final TabPane authTabs,
+        final Label status,
+        final PasswordField loginPassword,
+        final String username,
+        final String password,
+        final String progressMessage
+    ) {
+        setStatus(status, progressMessage, false);
+        tasks.run(
+            authTabs,
+            () -> services.authentication().login(username, password),
+            session -> {
+                loginPassword.clear();
+                if (active) {
+                    showDashboard(session);
+                } else {
+                    services.authentication().logout();
+                }
+            },
+            failure -> {
+                loginPassword.clear();
+                setStatus(
+                    status,
+                    UserViewSupport.errorMessage(failure),
+                    true
+                );
+            }
+        );
     }
 
     private void showDashboard(final UserSession session) {
