@@ -27,7 +27,6 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
-import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ProgressIndicator;
@@ -52,7 +51,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -87,8 +85,6 @@ public final class AdminDashboard {
 
     private final TextField editionNumberField = new TextField();
     private final TextField editionYearField = new TextField();
-    private final Button removeEditionButton =
-        new Button("Elimina edizione");
 
     private final Button saveGrandPrixButton =
         new Button("Inserisci Gran Premio");
@@ -139,7 +135,7 @@ public final class AdminDashboard {
     private final Button reopenWeekendButton =
         new Button("Riapri weekend");
     private final Button recordPerformanceButton =
-        new Button("Registra prestazione");
+        new Button("Registra");
     private final ListView<RaceWeekend> editionWeekendList =
         new ListView<>();
     private final ListView<GrandPrixOption> availableGrandPrixList =
@@ -278,41 +274,6 @@ public final class AdminDashboard {
                 }
             }
         );
-        configureRemovalList(
-            editionWeekendList,
-            this::removeWeekend,
-            ignored -> true
-        );
-        configureRemovalList(
-            availableGrandPrixList,
-            this::removeGrandPrix,
-            ignored -> true
-        );
-        configureRemovalList(
-            editionConstructorList,
-            this::removeConstructorEnrollment,
-            ignored -> true
-        );
-        configureRemovalList(
-            availableConstructorList,
-            this::removeConstructor,
-            ignored -> true
-        );
-        configureRemovalList(
-            editionDriverList,
-            this::removeDriverEnrollment,
-            ignored -> true
-        );
-        configureRemovalList(
-            availableDriverList,
-            this::removeDriver,
-            ignored -> true
-        );
-        configureRemovalList(
-            overviewPerformanceList,
-            this::removePerformance,
-            WeekendPerformanceStatus::recorded
-        );
         overviewPerformanceSummary.setWrapText(true);
         editionWeekendList.setPlaceholder(
             new Label("Nessun GP inserito nell'edizione.")
@@ -349,18 +310,12 @@ public final class AdminDashboard {
         refreshButton.setOnAction(
             event -> refreshAll(selectedEditionId(), "Cataloghi aggiornati.")
         );
-        removeEditionButton.getStyleClass().add("danger-button");
-        removeEditionButton.setOnAction(event -> removeEdition());
-
         progressIndicator.setMaxSize(22, 22);
         progressIndicator.visibleProperty().bind(busy);
         progressIndicator.managedProperty().bind(busy);
         tabs.disableProperty().bind(busy);
         editionCombo.disableProperty().bind(busy);
         refreshButton.disableProperty().bind(busy);
-        removeEditionButton.disableProperty().bind(
-            busy.or(editionCombo.valueProperty().isNull())
-        );
         concludeWeekendButton.disableProperty().bind(
             busy
                 .or(editionCombo.valueProperty().isNull())
@@ -498,15 +453,6 @@ public final class AdminDashboard {
             "Contenuto e completezza dell'edizione"
         );
         title.getStyleClass().add("section-title");
-        final Region titleSpacer = new Region();
-        HBox.setHgrow(titleSpacer, Priority.ALWAYS);
-        final HBox titleRow = new HBox(
-            10,
-            title,
-            titleSpacer,
-            removeEditionButton
-        );
-        titleRow.setAlignment(Pos.CENTER_LEFT);
         final TabPane overviewTabs = new TabPane(
             overviewTab(
                 "Calendario",
@@ -547,7 +493,7 @@ public final class AdminDashboard {
 
         final VBox content = new VBox(
             12,
-            titleRow,
+            title,
             new Separator(),
             overviewTabs
         );
@@ -1067,7 +1013,7 @@ public final class AdminDashboard {
                 ignored -> {
                     refreshAll(
                         edition.id(),
-                        "Prestazione salvata correttamente."
+                        "Prestazione registrata correttamente."
                     );
                 }
             );
@@ -1139,183 +1085,6 @@ public final class AdminDashboard {
         } catch (RuntimeException exception) {
             showInputError(exception);
         }
-    }
-
-    private void removeEdition() {
-        final Edizione edition = editionCombo.getValue();
-        if (edition == null) {
-            return;
-        }
-        executeMutation(
-            "rimozione-edizione",
-            "Rimozione dell'edizione in corso…",
-            () -> {
-                admin.removeEdition(edition.id());
-                return Boolean.TRUE;
-            },
-            ignored -> {
-                refreshAll(null, "Edizione eliminata correttamente.");
-            }
-        );
-    }
-
-    private void removeGrandPrix(final GrandPrixOption grandPrix) {
-        final Integer editionId = selectedEditionId();
-        executeMutation(
-            "rimozione-gran-premio",
-            "Rimozione del Gran Premio in corso…",
-            () -> {
-                admin.removeGrandPrix(grandPrix.id());
-                return Boolean.TRUE;
-            },
-            ignored -> {
-                refreshAll(
-                    editionId,
-                    "Gran Premio eliminato correttamente."
-                );
-            }
-        );
-    }
-
-    private void removeWeekend(final RaceWeekend weekend) {
-        if (weekend.concluded()) {
-            showInputError(new IllegalArgumentException(
-                "Riapri il weekend concluso prima di rimuoverlo."
-            ));
-            return;
-        }
-        executeMutation(
-            "rimozione-weekend",
-            "Rimozione del weekend in corso…",
-            () -> {
-                admin.removeWeekend(
-                    weekend.editionId(),
-                    weekend.grandPrixId()
-                );
-                return Boolean.TRUE;
-            },
-            ignored -> {
-                refreshAll(
-                    weekend.editionId(),
-                    "Weekend rimosso correttamente."
-                );
-            }
-        );
-    }
-
-    private void removeConstructor(
-        final ConstructorOption constructor
-    ) {
-        final Integer editionId = selectedEditionId();
-        executeMutation(
-            "rimozione-scuderia",
-            "Rimozione della scuderia in corso…",
-            () -> {
-                admin.removeConstructor(constructor.id());
-                return Boolean.TRUE;
-            },
-            ignored -> {
-                refreshAll(
-                    editionId,
-                    "Scuderia anagrafica eliminata correttamente."
-                );
-            }
-        );
-    }
-
-    private void removeConstructorEnrollment(
-        final EnrolledConstructorOption constructor
-    ) {
-        executeMutation(
-            "rimozione-iscrizione-scuderia",
-            "Rimozione dell'iscrizione della scuderia in corso…",
-            () -> {
-                admin.removeConstructorEnrollment(
-                    constructor.editionId(),
-                    constructor.constructorId()
-                );
-                return Boolean.TRUE;
-            },
-            ignored -> {
-                refreshAll(
-                    constructor.editionId(),
-                    "Iscrizione della scuderia rimossa correttamente."
-                );
-            }
-        );
-    }
-
-    private void removeDriver(final DriverRegistryOption driver) {
-        final Integer editionId = selectedEditionId();
-        executeMutation(
-            "rimozione-pilota",
-            "Rimozione del pilota in corso…",
-            () -> {
-                admin.removeDriver(driver.id());
-                return Boolean.TRUE;
-            },
-            ignored -> {
-                refreshAll(
-                    editionId,
-                    "Pilota anagrafico eliminato correttamente."
-                );
-            }
-        );
-    }
-
-    private void removeDriverEnrollment(final DriverOption driver) {
-        executeMutation(
-            "rimozione-iscrizione-pilota",
-            "Rimozione dell'iscrizione del pilota in corso…",
-            () -> {
-                admin.removeDriverEnrollment(
-                    driver.editionId(),
-                    driver.id()
-                );
-                return Boolean.TRUE;
-            },
-            ignored -> {
-                refreshAll(
-                    driver.editionId(),
-                    "Iscrizione del pilota rimossa correttamente."
-                );
-            }
-        );
-    }
-
-    private void removePerformance(
-        final WeekendPerformanceStatus performance
-    ) {
-        if (!performance.recorded()) {
-            return;
-        }
-        final RaceWeekend weekend =
-            overviewPerformanceWeekendCombo.getValue();
-        if (weekend != null && weekend.concluded()) {
-            showInputError(new IllegalArgumentException(
-                "Riapri il weekend concluso prima di rimuovere "
-                    + "una prestazione."
-            ));
-            return;
-        }
-        executeMutation(
-            "rimozione-prestazione",
-            "Rimozione della prestazione in corso…",
-            () -> {
-                admin.removePerformance(
-                    performance.editionId(),
-                    performance.grandPrixId(),
-                    performance.driverId()
-                );
-                return Boolean.TRUE;
-            },
-            ignored -> {
-                refreshAll(
-                    performance.editionId(),
-                    "Prestazione sportiva rimossa correttamente."
-                );
-            }
-        );
     }
 
     private void refreshAll(
@@ -1929,69 +1698,6 @@ public final class AdminDashboard {
         combo.setPromptText(prompt);
         combo.setPrefWidth(FIELD_WIDTH);
         combo.setMaxWidth(Double.MAX_VALUE);
-    }
-
-    private <T> void configureRemovalList(
-        final ListView<T> list,
-        final Consumer<T> removal,
-        final Predicate<T> removable
-    ) {
-        list.setCellFactory(ignored -> new ListCell<>() {
-            private final Label description = new Label();
-            private final Region spacer = new Region();
-            private final Button remove = new Button("Rimuovi");
-            private final HBox content = new HBox(
-                10,
-                description,
-                spacer,
-                remove
-            );
-
-            {
-                description.setWrapText(true);
-                description.setMaxWidth(Double.MAX_VALUE);
-                HBox.setHgrow(description, Priority.ALWAYS);
-                HBox.setHgrow(spacer, Priority.ALWAYS);
-                content.setAlignment(Pos.CENTER_LEFT);
-                remove.getStyleClass().addAll(
-                    "compact-button",
-                    "danger-button"
-                );
-                remove.disableProperty().bind(busy);
-                remove.setOnAction(event -> {
-                    final T current = getItem();
-                    if (current != null && removable.test(current)) {
-                        removal.accept(current);
-                    }
-                });
-            }
-
-            @Override
-            protected void updateItem(final T item, final boolean empty) {
-                super.updateItem(item, empty);
-                setText(null);
-                description.getStyleClass().removeAll(
-                    "success-text",
-                    "error-text"
-                );
-                if (empty || item == null) {
-                    setGraphic(null);
-                    return;
-                }
-                description.setText(item.toString());
-                final boolean canRemove = removable.test(item);
-                remove.setVisible(canRemove);
-                remove.setManaged(canRemove);
-                if (item instanceof WeekendPerformanceStatus status) {
-                    description.getStyleClass().add(
-                        status.recorded()
-                            ? "success-text"
-                            : "error-text"
-                    );
-                }
-                setGraphic(content);
-            }
-        });
     }
 
     private static <T> void replaceItems(

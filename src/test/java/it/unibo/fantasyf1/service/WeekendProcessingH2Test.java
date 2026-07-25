@@ -64,38 +64,35 @@ final class WeekendProcessingH2Test {
     }
 
     @Test
-    void a8StoresOnlyOpenPerformancesAndU8WaitsForA9() {
+    void a8StoresEachOpenPerformanceOnlyOnceAndU8WaitsForA9() {
         final WeekendFixture weekend = completeWeekendFixture();
         final List<PerformanceData> performances = performances();
 
         for (int index = 0; index < performances.size(); index++) {
             record(weekend, index, performances.get(index));
         }
-        database.update(
-            """
-            UPDATE PRESTAZIONE_WEEKEND
-            SET PunteggioFantasy = 123
-            WHERE IdEdizione = ? AND IdGranPremio = ? AND IdPilota = ?
-            """,
-            weekend.editionId(),
-            weekend.grandPrixId(),
-            weekend.driverIds().getFirst()
+        final AppException duplicate = assertThrows(
+            AppException.class,
+            () -> record(
+                weekend,
+                0,
+                new PerformanceData(20, 20, false, false)
+            )
         );
-        database.update(
-            """
-            INSERT INTO RISULTATO_TEAM
-                (IdEdizione, IdGranPremio, IdTeam, PunteggioWeekend)
-            VALUES (?, ?, ?, 123)
-            """,
-            weekend.editionId(),
-            weekend.grandPrixId(),
-            weekend.teamId()
+        assertEquals(ErrorCode.CONFLICT, duplicate.code());
+        assertEquals(
+            performances.getFirst().qualifyingPosition(),
+            database.queryInt(
+                """
+                SELECT PosizionamentoQualifica
+                FROM PRESTAZIONE_WEEKEND
+                WHERE IdEdizione = ? AND IdGranPremio = ? AND IdPilota = ?
+                """,
+                weekend.editionId(),
+                weekend.grandPrixId(),
+                weekend.driverIds().getFirst()
+            )
         );
-        database.update(
-            "UPDATE TEAM_FANTASY SET PunteggioTotale = 123 WHERE IdTeam = ?",
-            weekend.teamId()
-        );
-        record(weekend, 0, performances.getFirst());
 
         assertFalse(admin.weekends(weekend.editionId()).getFirst().concluded());
         assertEquals(
@@ -280,16 +277,19 @@ final class WeekendProcessingH2Test {
             )
         );
         assertEquals(ErrorCode.CONFLICT, correction.code());
-        new TransactionManager(database).inTransaction(connection -> {
-            new AdminDao().upsertPerformance(
-                connection,
-                weekend.editionId(),
-                weekend.grandPrixId(),
-                weekend.driverIds().getFirst(),
-                new PerformanceData(20, 20, false, false)
-            );
-            return null;
-        });
+        assertThrows(
+            AppException.class,
+            () -> new TransactionManager(database).inTransaction(connection -> {
+                new AdminDao().insertPerformance(
+                    connection,
+                    weekend.editionId(),
+                    weekend.grandPrixId(),
+                    weekend.driverIds().getFirst(),
+                    new PerformanceData(20, 20, false, false)
+                );
+                return null;
+            })
+        );
         assertEquals(
             1,
             database.queryInt(
@@ -426,9 +426,15 @@ final class WeekendProcessingH2Test {
             )
         );
 
-        final PerformanceData corrected =
-            new PerformanceData(20, 20, false, false);
-        record(weekend, 0, corrected);
+        final AppException correction = assertThrows(
+            AppException.class,
+            () -> record(
+                weekend,
+                0,
+                new PerformanceData(20, 20, false, false)
+            )
+        );
+        assertEquals(ErrorCode.CONFLICT, correction.code());
         assertEquals(
             0,
             database.queryInt(
@@ -446,10 +452,9 @@ final class WeekendProcessingH2Test {
             weekend.grandPrixId()
         );
 
-        final int recalculated = scoring.score(corrected)
-            + initial.subList(1, initial.size()).stream()
-                .mapToInt(scoring::score)
-                .sum();
+        final int recalculated = initial.stream()
+            .mapToInt(scoring::score)
+            .sum();
         assertEquals(
             2,
             database.queryInt(
