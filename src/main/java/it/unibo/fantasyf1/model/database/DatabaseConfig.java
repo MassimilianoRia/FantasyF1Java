@@ -1,23 +1,21 @@
 package it.unibo.fantasyf1.model.database;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
+
 /**
  * Configurazione necessaria per collegarsi al database MySQL.
  *
- * <p>URL e utente possono essere impostati tramite variabili d'ambiente oppure
- * tramite proprieta JVM. La password del database locale e inclusa nella
- * configurazione del progetto.</p>
+ * <p>Tutti i parametri vengono letti dall'unico file di configurazione
+ * {@code src/main/resources/database.properties}.</p>
  */
 public record DatabaseConfig(String url, String user, String password) {
 
-    public static final String DEFAULT_URL =
-        "jdbc:mysql://localhost:3306/fantasy_f1";
-    private static final String DEFAULT_PASSWORD = "Stellarium!23";
-
-    private static final String URL_PROPERTY = "fantasyf1.db.url";
-    private static final String USER_PROPERTY = "fantasyf1.db.user";
-
-    private static final String URL_ENV = "FANTASY_F1_DB_URL";
-    private static final String USER_ENV = "FANTASY_F1_DB_USER";
+    private static final String CONFIG_RESOURCE = "/database.properties";
+    private static final String URL_KEY = "database.url";
+    private static final String USER_KEY = "database.user";
+    private static final String PASSWORD_KEY = "database.password";
 
     public DatabaseConfig {
         if (url == null || url.isBlank()) {
@@ -32,30 +30,49 @@ public record DatabaseConfig(String url, String user, String password) {
     }
 
     /**
-     * Carica la configurazione. I valori predefiniti sono l'URL locale del
-     * progetto, l'utente {@code root} e la password del database di sviluppo.
+     * Carica URL, utente e password dal file di configurazione centralizzato.
      *
      * @return configurazione del database
+     * @throws IllegalStateException se il file manca, non e leggibile o e
+     *         incompleto
      */
     public static DatabaseConfig load() {
+        final Properties properties = new Properties();
+        try (
+            InputStream input = DatabaseConfig.class.getResourceAsStream(
+                CONFIG_RESOURCE
+            )
+        ) {
+            if (input == null) {
+                throw new IllegalStateException(
+                    "File di configurazione non trovato: " + CONFIG_RESOURCE
+                );
+            }
+            properties.load(input);
+        } catch (IOException exception) {
+            throw new IllegalStateException(
+                "Impossibile leggere " + CONFIG_RESOURCE,
+                exception
+            );
+        }
+
         return new DatabaseConfig(
-            value(URL_PROPERTY, URL_ENV, DEFAULT_URL),
-            value(USER_PROPERTY, USER_ENV, "root"),
-            DEFAULT_PASSWORD
+            requiredProperty(properties, URL_KEY),
+            requiredProperty(properties, USER_KEY),
+            requiredProperty(properties, PASSWORD_KEY)
         );
     }
 
-    private static String value(
-        final String propertyName,
-        final String environmentName,
-        final String defaultValue
+    private static String requiredProperty(
+        final Properties properties,
+        final String key
     ) {
-        final String propertyValue = System.getProperty(propertyName);
-        if (propertyValue != null) {
-            return propertyValue;
+        final String value = properties.getProperty(key);
+        if (value == null) {
+            throw new IllegalStateException(
+                "Proprieta mancante in " + CONFIG_RESOURCE + ": " + key
+            );
         }
-
-        final String environmentValue = System.getenv(environmentName);
-        return environmentValue != null ? environmentValue : defaultValue;
+        return value;
     }
 }

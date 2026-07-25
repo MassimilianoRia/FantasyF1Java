@@ -6,15 +6,22 @@ L'applicazione usa Java 21, JDBC diretto e MySQL 8.0.16.
 
 ## Configurazione della connessione
 
-La configurazione predefinita è:
+L'unico punto di configurazione della connessione è
+`src/main/resources/database.properties`:
 
-- URL: `jdbc:mysql://localhost:3306/fantasy_f1`
-- utente: `root`
-- password: `Stellarium!23`
+```properties
+database.url=jdbc:mysql://localhost:3306/fantasy_f1
+database.user=root
+database.password=Stellarium!23
+```
+
+Per usare un altro server MySQL e sufficiente modificare questi tre valori.
+L'URL deve indicare il database `fantasy_f1` creato eseguendo `schema.sql` su
+quello stesso server.
 
 ## Creazione e popolamento
 
-Eseguire nell'ordine:
+Prima di avviare l'applicazione, eseguire sul server configurato:
 
 1. `src/main/resources/db/schema.sql`
 2. `src/main/resources/db/seed.sql`
