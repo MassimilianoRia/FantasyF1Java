@@ -6,6 +6,7 @@ import it.unibo.fantasyf1.model.LegaDisponibile;
 import it.unibo.fantasyf1.model.StandingRow;
 import it.unibo.fantasyf1.model.TeamSummary;
 import it.unibo.fantasyf1.service.ApplicationServices;
+import it.unibo.fantasyf1.ui.UiTheme;
 
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
@@ -81,6 +82,7 @@ final class LeagueTabView {
         VBox.setVgrow(tabs, Priority.ALWAYS);
         root.getChildren().add(tabs);
         root.setPadding(new Insets(10, 0, 0, 0));
+        root.getStyleClass().add("feature-root");
     }
 
     Node content() {
@@ -153,6 +155,7 @@ final class LeagueTabView {
                 }
             }
         });
+        UiTheme.configureReadOnly(standings);
 
         availableLeagues.getSelectionModel()
             .selectedItemProperty()
@@ -184,9 +187,9 @@ final class LeagueTabView {
 
         createLeague.setOnAction(event -> createLeague());
         join.setOnAction(event -> joinSelectedLeague());
-        selectedLeagueTitle.setStyle(
-            "-fx-font-size: 18px; -fx-font-weight: bold;"
-        );
+        createLeague.getStyleClass().add("primary-button");
+        join.getStyleClass().add("primary-button");
+        selectedLeagueTitle.getStyleClass().add("subsection-title");
         selectedLeagueDetail.setWrapText(true);
         updateCreateAvailability();
         updateJoinAvailability();
@@ -604,6 +607,7 @@ final class LeagueTabView {
     private static BorderPane padded(final Node content) {
         final BorderPane pane = new BorderPane(content);
         pane.setPadding(new Insets(12));
+        pane.getStyleClass().add("content-pane");
         return pane;
     }
 

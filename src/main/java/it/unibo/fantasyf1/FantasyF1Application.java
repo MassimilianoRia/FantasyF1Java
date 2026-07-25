@@ -1,6 +1,7 @@
 package it.unibo.fantasyf1;
 
 import it.unibo.fantasyf1.service.ApplicationServices;
+import it.unibo.fantasyf1.ui.UiTheme;
 import it.unibo.fantasyf1.ui.admin.AdminDashboard;
 import it.unibo.fantasyf1.ui.user.FxTaskRunner;
 import it.unibo.fantasyf1.ui.user.UserApplicationView;
@@ -14,6 +15,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
@@ -43,6 +45,7 @@ public final class FantasyF1Application extends Application {
             INITIAL_WIDTH,
             INITIAL_HEIGHT
         );
+        UiTheme.apply(scene);
 
         stage.setScene(scene);
         stage.setMinWidth(APPLICATION_MIN_WIDTH);
@@ -59,19 +62,20 @@ public final class FantasyF1Application extends Application {
         closeUserApplication();
 
         final Label title = new Label("Fantasy Formula 1");
-        title.setStyle("-fx-font-size: 30px; -fx-font-weight: bold;");
+        title.getStyleClass().add("page-title");
 
         final Label prompt = new Label(
             "Scegli in quale modalità vuoi entrare nell'applicazione."
         );
         prompt.setWrapText(true);
+        prompt.getStyleClass().add("muted");
 
         final Button userButton = new Button("Utente");
         final Button adminButton = new Button("Admin");
         for (Button button : new Button[] {userButton, adminButton}) {
             button.setMinWidth(180);
             button.setMinHeight(48);
-            button.setStyle("-fx-font-size: 15px;");
+            button.getStyleClass().add("mode-button");
         }
 
         userButton.setOnAction(event -> showUserApplication());
@@ -84,15 +88,12 @@ public final class FantasyF1Application extends Application {
         card.setAlignment(Pos.CENTER);
         card.setPadding(new Insets(36));
         card.setMaxWidth(540);
-        card.setStyle(
-            "-fx-background-color: white;"
-                + "-fx-border-color: #d7d7d7;"
-                + "-fx-border-radius: 6;"
-                + "-fx-background-radius: 6;"
-        );
+        card.setMaxHeight(Region.USE_PREF_SIZE);
+        card.getStyleClass().addAll("card", "mode-card");
 
         final BorderPane root = new BorderPane(card);
         root.setPadding(new Insets(32));
+        root.getStyleClass().add("app-root");
         BorderPane.setAlignment(card, Pos.CENTER);
 
         showRoot(

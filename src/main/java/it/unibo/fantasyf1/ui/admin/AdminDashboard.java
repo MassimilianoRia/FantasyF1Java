@@ -13,6 +13,7 @@ import it.unibo.fantasyf1.model.RaceWeekend;
 import it.unibo.fantasyf1.model.WeekendPerformanceStatus;
 import it.unibo.fantasyf1.service.AdminService;
 import it.unibo.fantasyf1.service.PerformanceRequest;
+import it.unibo.fantasyf1.ui.UiTheme;
 
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ObjectProperty;
@@ -318,13 +319,17 @@ public final class AdminDashboard {
                 ) {
                     super.updateItem(item, empty);
                     setText(empty || item == null ? null : item.toString());
-                    setStyle(
-                        empty || item == null
-                            ? ""
-                            : item.recorded()
-                                ? "-fx-text-fill: #176b2c;"
-                                : "-fx-text-fill: #b00020;"
+                    getStyleClass().removeAll(
+                        "success-text",
+                        "error-text"
                     );
+                    if (!empty && item != null) {
+                        getStyleClass().add(
+                            item.recorded()
+                                ? "success-text"
+                                : "error-text"
+                        );
+                    }
                 }
             }
         );
@@ -351,6 +356,17 @@ public final class AdminDashboard {
         overviewPerformanceList.setPlaceholder(
             new Label("Nessun pilota iscritto da verificare.")
         );
+        for (ListView<?> list : List.<ListView<?>>of(
+            editionWeekendList,
+            availableGrandPrixList,
+            editionConstructorList,
+            availableConstructorList,
+            editionDriverList,
+            availableDriverList,
+            overviewPerformanceList
+        )) {
+            UiTheme.configureReadOnly(list);
+        }
         refreshButton.setOnAction(
             event -> refreshAll(selectedEditionId(), "Cataloghi aggiornati.")
         );
@@ -395,6 +411,7 @@ public final class AdminDashboard {
 
     private void buildLayout() {
         root.setPadding(new Insets(20));
+        root.getStyleClass().addAll("app-root", "admin-root");
         root.setTop(createHeader());
         root.setCenter(createTabs());
         root.setBottom(createStatusBar());
@@ -403,7 +420,7 @@ public final class AdminDashboard {
 
     private Node createHeader() {
         final Label title = new Label("Amministrazione Fantasy Formula 1");
-        title.setStyle("-fx-font-size: 26px; -fx-font-weight: bold;");
+        title.getStyleClass().add("page-title");
         final Region titleSpacer = new Region();
         HBox.setHgrow(titleSpacer, Priority.ALWAYS);
         final Button changeMode = new Button("← Selezione modalità");
@@ -418,7 +435,7 @@ public final class AdminDashboard {
         titleRow.setAlignment(Pos.CENTER_LEFT);
 
         final Label editionLabel = new Label("Edizione operativa:");
-        editionLabel.setStyle("-fx-font-weight: bold;");
+        editionLabel.getStyleClass().add("form-label");
         final HBox editionRow = new HBox(
             10,
             editionLabel,
@@ -427,7 +444,7 @@ public final class AdminDashboard {
         );
         editionRow.setAlignment(Pos.CENTER_LEFT);
 
-        completionTitle.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        completionTitle.getStyleClass().add("subsection-title");
         completionDetail.setWrapText(true);
         completionProgress.setPrefWidth(420);
         completionProgress.setMaxWidth(Double.MAX_VALUE);
@@ -439,16 +456,16 @@ public final class AdminDashboard {
             completionProgress
         );
         completionBox.setPadding(new Insets(10));
-        completionBox.setStyle(
-            "-fx-border-color: #d4d4d4; -fx-border-radius: 4px;"
-        );
+        completionBox.getStyleClass().add("summary-card");
 
-        return new VBox(
+        final VBox header = new VBox(
             10,
             titleRow,
             editionRow,
             completionBox
         );
+        header.getStyleClass().add("app-header");
+        return header;
     }
 
     private Node createTabs() {
@@ -496,7 +513,7 @@ public final class AdminDashboard {
         final Label title = new Label(
             "Contenuto e completezza dell'edizione"
         );
-        title.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+        title.getStyleClass().add("section-title");
         final Label description = new Label(
             "Confronta ciò che è già presente con gli elementi anagrafici "
                 + "ancora aggiungibili e controlla le prestazioni di ogni GP."
@@ -550,12 +567,13 @@ public final class AdminDashboard {
             overviewTabs
         );
         content.setPadding(new Insets(20));
+        content.getStyleClass().add("content-pane");
         return content;
     }
 
     private Node createPerformanceOverview() {
         final Label selectorLabel = new Label("Gran Premio:");
-        selectorLabel.setStyle("-fx-font-weight: bold;");
+        selectorLabel.getStyleClass().add("form-label");
         final HBox selector = new HBox(
             10,
             selectorLabel,
@@ -597,8 +615,9 @@ public final class AdminDashboard {
         final ListView<?> list
     ) {
         final Label label = new Label(title);
-        label.setStyle("-fx-font-weight: bold;");
+        label.getStyleClass().add("form-label");
         final VBox box = new VBox(8, label, list);
+        box.getStyleClass().add("comparison-card");
         VBox.setVgrow(list, Priority.ALWAYS);
         return box;
     }
@@ -616,6 +635,7 @@ public final class AdminDashboard {
         addRow(form, 1, "Anno", editionYearField);
 
         final Button save = new Button("Crea edizione");
+        save.getStyleClass().add("primary-button");
         save.disableProperty().bind(busy);
         save.setOnAction(event -> createEdition());
         return formPage(
@@ -649,6 +669,7 @@ public final class AdminDashboard {
             event -> selectGrandPrixMode(GrandPrixMode.UPDATE)
         );
         saveGrandPrixButton.setOnAction(event -> saveGrandPrix());
+        saveGrandPrixButton.getStyleClass().add("primary-button");
         final Button cancel = new Button("Annulla operazione");
         cancel.disableProperty().bind(busy);
         cancel.setOnAction(event -> selectGrandPrixMode(null));
@@ -690,6 +711,7 @@ public final class AdminDashboard {
         addRow(form, 3, "Data fine", weekendEndDate);
 
         final Button save = new Button("Inserisci weekend");
+        save.getStyleClass().add("primary-button");
         save.disableProperty().bind(busy);
         save.setOnAction(event -> addWeekend());
         return formPage(
@@ -706,6 +728,7 @@ public final class AdminDashboard {
         addRow(form, 0, "Nome scuderia", constructorNameField);
 
         final Button save = new Button("Registra scuderia");
+        save.getStyleClass().add("primary-button");
         save.disableProperty().bind(busy);
         save.setOnAction(event -> createConstructor());
         return formPage(
@@ -728,6 +751,7 @@ public final class AdminDashboard {
         addRow(form, 2, "Vettura", carNameField);
 
         final Button save = new Button("Iscrivi scuderia");
+        save.getStyleClass().add("primary-button");
         save.disableProperty().bind(busy);
         save.setOnAction(event -> enrollConstructor());
         return formPage(
@@ -747,6 +771,7 @@ public final class AdminDashboard {
         addRow(form, 3, "Data di nascita", driverBirthDate);
 
         final Button save = new Button("Registra pilota");
+        save.getStyleClass().add("primary-button");
         save.disableProperty().bind(busy);
         save.setOnAction(event -> createDriver());
         return formPage(
@@ -765,6 +790,7 @@ public final class AdminDashboard {
         addRow(form, 3, "Scuderia iscritta", enrolledConstructorCombo);
 
         final Button save = new Button("Iscrivi pilota");
+        save.getStyleClass().add("primary-button");
         save.disableProperty().bind(busy);
         save.setOnAction(event -> enrollDriver());
         return formPage(
@@ -788,11 +814,12 @@ public final class AdminDashboard {
         recordPerformanceButton.setOnAction(event -> recordPerformance());
         concludeWeekendButton.setOnAction(event -> concludeWeekend());
         reopenWeekendButton.setOnAction(event -> reopenWeekend());
+        recordPerformanceButton.getStyleClass().add("primary-button");
+        concludeWeekendButton.getStyleClass().add("primary-button");
+        reopenWeekendButton.getStyleClass().add("danger-button");
 
         weekendResultStatusLabel.setWrapText(true);
-        weekendResultStatusLabel.setStyle(
-            "-fx-background-color: #f3f6f8; -fx-padding: 10px;"
-        );
+        weekendResultStatusLabel.getStyleClass().add("status-note");
         final VBox actions = new VBox(
             10,
             new HBox(
@@ -825,7 +852,8 @@ public final class AdminDashboard {
             spacer
         );
         statusBar.setAlignment(Pos.CENTER_LEFT);
-        statusBar.setPadding(new Insets(8, 0, 0, 0));
+        statusBar.setPadding(new Insets(8, 12, 8, 12));
+        statusBar.getStyleClass().add("status-bar");
         return statusBar;
     }
 
@@ -1576,12 +1604,10 @@ public final class AdminDashboard {
             + Math.min(status.drivers(), 20)
             + Math.min(status.constructorsWithTwoDrivers(), 10);
         completionProgress.setProgress(completed / COMPLETION_TOTAL);
-        completionTitle.setStyle(
-            status.complete()
-                ? "-fx-font-size: 16px; -fx-font-weight: bold; "
-                    + "-fx-text-fill: #176b2c;"
-                : "-fx-font-size: 16px; -fx-font-weight: bold;"
-        );
+        completionTitle.getStyleClass().remove("success-text");
+        if (status.complete()) {
+            completionTitle.getStyleClass().add("success-text");
+        }
     }
 
     private void clearEditionScopedCatalogs() {
@@ -1612,6 +1638,7 @@ public final class AdminDashboard {
             "Seleziona un GP per verificare le prestazioni."
         );
         completionTitle.setText("Nessuna edizione selezionata");
+        completionTitle.getStyleClass().remove("success-text");
         completionDetail.setText(
             "Crea o seleziona un'edizione per visualizzarne lo stato."
         );
@@ -1701,6 +1728,7 @@ public final class AdminDashboard {
             ButtonType.OK,
             ButtonType.CANCEL
         );
+        UiTheme.apply(alert.getDialogPane());
         alert.setTitle("Conferma riapertura");
         alert.setHeaderText("Riaprire il weekend concluso?");
         if (root.getScene() != null && root.getScene().getWindow() != null) {
@@ -1716,6 +1744,7 @@ public final class AdminDashboard {
         final String message
     ) {
         final Alert alert = new Alert(type);
+        UiTheme.apply(alert.getDialogPane());
         alert.setTitle(title);
         alert.setHeaderText(header);
         alert.setContentText(message);
@@ -1730,11 +1759,10 @@ public final class AdminDashboard {
         final boolean error
     ) {
         operationStatus.setText(message);
-        operationStatus.setStyle(
-            error
-                ? "-fx-text-fill: #a00018; -fx-font-weight: bold;"
-                : ""
-        );
+        operationStatus.getStyleClass().remove("error-text");
+        if (error) {
+            operationStatus.getStyleClass().add("error-text");
+        }
     }
 
     private void populateGrandPrixForm(final GrandPrixOption grandPrix) {
@@ -1770,16 +1798,13 @@ public final class AdminDashboard {
     }
 
     private void updateGrandPrixModeControls(final GrandPrixMode mode) {
-        insertGrandPrixMode.setStyle(
-            mode == GrandPrixMode.INSERT
-                ? "-fx-font-weight: bold; -fx-background-color: #cfe7ff;"
-                : ""
-        );
-        updateGrandPrixMode.setStyle(
-            mode == GrandPrixMode.UPDATE
-                ? "-fx-font-weight: bold; -fx-background-color: #cfe7ff;"
-                : ""
-        );
+        insertGrandPrixMode.getStyleClass().remove("active-choice");
+        updateGrandPrixMode.getStyleClass().remove("active-choice");
+        if (mode == GrandPrixMode.INSERT) {
+            insertGrandPrixMode.getStyleClass().add("active-choice");
+        } else if (mode == GrandPrixMode.UPDATE) {
+            updateGrandPrixMode.getStyleClass().add("active-choice");
+        }
         saveGrandPrixButton.setText(
             mode == GrandPrixMode.INSERT
                 ? "Inserisci Gran Premio"
@@ -1915,6 +1940,7 @@ public final class AdminDashboard {
         final GridPane grid = new GridPane();
         grid.setHgap(16);
         grid.setVgap(12);
+        grid.getStyleClass().add("form-grid");
         final ColumnConstraints labels = new ColumnConstraints();
         labels.setMinWidth(180);
         final ColumnConstraints fields = new ColumnConstraints();
@@ -1930,7 +1956,7 @@ public final class AdminDashboard {
         final Node field
     ) {
         final Label label = new Label(labelText + ":");
-        label.setStyle("-fx-font-weight: bold;");
+        label.getStyleClass().add("form-label");
         GridPane.setHgrow(field, Priority.ALWAYS);
         grid.add(label, 0, row);
         grid.add(field, 1, row);
@@ -1943,7 +1969,7 @@ public final class AdminDashboard {
         final Node actions
     ) {
         final Label title = new Label(titleText);
-        title.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+        title.getStyleClass().add("section-title");
         final Label description = new Label(descriptionText);
         description.setWrapText(true);
         final VBox content = new VBox(
@@ -1956,6 +1982,7 @@ public final class AdminDashboard {
         );
         content.setPadding(new Insets(20));
         content.setMaxWidth(760);
+        content.getStyleClass().add("form-page");
 
         final ScrollPane scrollPane = new ScrollPane(content);
         scrollPane.setFitToWidth(true);

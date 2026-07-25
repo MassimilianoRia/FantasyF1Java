@@ -1,0 +1,474 @@
+/*
+ * Tema condiviso dell'applicazione.
+ * Toni neutri e un rosso scuro richiamano la Formula 1 senza appesantire
+ * l'interfaccia di un progetto universitario.
+ */
+
+.root {
+    -fx-accent: #a32636;
+    -fx-focus-color: #a32636;
+    -fx-faint-focus-color: rgba(163, 38, 54, 0.14);
+    -fx-selection-bar: #a32636;
+    -fx-selection-bar-non-focused: #bd6671;
+    -fx-font-family: "Segoe UI", "Arial", sans-serif;
+    -fx-font-size: 13px;
+    -fx-background-color: #f4f6f8;
+}
+
+.label {
+    -fx-text-fill: #27313b;
+}
+
+.app-root {
+    -fx-background-color: #f4f6f8;
+}
+
+.page-title {
+    -fx-font-size: 27px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #202830;
+}
+
+.section-title {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #27313b;
+}
+
+.subsection-title {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #34404b;
+}
+
+.muted {
+    -fx-text-fill: #64717d;
+}
+
+.success-text {
+    -fx-text-fill: #237448;
+}
+
+.error-text {
+    -fx-text-fill: #a02031;
+    -fx-font-weight: bold;
+}
+
+.form-label {
+    -fx-font-weight: bold;
+    -fx-text-fill: #3e4a55;
+}
+
+.card,
+.summary-card,
+.comparison-card,
+.content-pane,
+.form-page {
+    -fx-background-color: white;
+    -fx-border-color: #d9dee4;
+    -fx-border-width: 1px;
+    -fx-border-radius: 8px;
+    -fx-background-radius: 8px;
+}
+
+.card {
+    -fx-effect: dropshadow(gaussian, rgba(32, 40, 48, 0.10), 18, 0.12, 0, 5);
+}
+
+.mode-card {
+    -fx-border-color: #d4dae0;
+    -fx-border-radius: 12px;
+    -fx-background-radius: 12px;
+}
+
+.summary-card {
+    -fx-background-color: #fafbfc;
+    -fx-border-color: #d6dce2;
+}
+
+.comparison-card {
+    -fx-padding: 12px;
+}
+
+.app-header {
+    -fx-background-color: white;
+    -fx-border-color: transparent transparent #d9dee4 transparent;
+    -fx-border-width: 0 0 1px 0;
+    -fx-padding: 12px 14px;
+    -fx-background-radius: 8px 8px 0 0;
+}
+
+.user-pill {
+    -fx-background-color: #edf0f3;
+    -fx-background-radius: 20px;
+    -fx-padding: 6px 11px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #46525d;
+}
+
+.status-bar,
+.status-note {
+    -fx-background-color: #eef1f4;
+    -fx-border-color: #d9dee4;
+    -fx-border-radius: 7px;
+    -fx-background-radius: 7px;
+    -fx-padding: 9px 12px;
+}
+
+.button {
+    -fx-background-color: white;
+    -fx-text-fill: #34404b;
+    -fx-font-weight: 600;
+    -fx-border-color: #cbd2d9;
+    -fx-border-width: 1px;
+    -fx-border-radius: 7px;
+    -fx-background-radius: 7px;
+    -fx-padding: 8px 14px;
+    -fx-cursor: hand;
+}
+
+.button:hover {
+    -fx-background-color: #f9edef;
+    -fx-border-color: #a32636;
+    -fx-text-fill: #8f1f2e;
+}
+
+.button:pressed {
+    -fx-background-color: #f1dadd;
+}
+
+.button:focused {
+    -fx-border-color: #a32636;
+}
+
+.button:disabled {
+    -fx-opacity: 0.55;
+    -fx-cursor: default;
+}
+
+.button:default,
+.button.primary-button {
+    -fx-background-color: #a32636;
+    -fx-border-color: #a32636;
+    -fx-text-fill: white;
+}
+
+.button:default:hover,
+.button.primary-button:hover {
+    -fx-background-color: #8e1f2e;
+    -fx-border-color: #8e1f2e;
+    -fx-text-fill: white;
+}
+
+.button.mode-button {
+    -fx-min-height: 50px;
+    -fx-font-size: 15px;
+    -fx-text-fill: #8f1f2e;
+    -fx-border-color: #c77580;
+    -fx-border-width: 1.2px;
+    -fx-border-radius: 9px;
+    -fx-background-radius: 9px;
+}
+
+.button.mode-button:hover {
+    -fx-background-color: #a32636;
+    -fx-border-color: #a32636;
+    -fx-text-fill: white;
+}
+
+.button.compact-button {
+    -fx-min-width: 36px;
+    -fx-padding: 5px 9px;
+}
+
+.button.active-choice {
+    -fx-background-color: #f5e1e4;
+    -fx-border-color: #a32636;
+    -fx-text-fill: #831c29;
+}
+
+.button.danger-button {
+    -fx-text-fill: #9b2532;
+    -fx-border-color: #c9828b;
+}
+
+.text-field,
+.password-field,
+.combo-box-base,
+.date-picker {
+    -fx-background-color: white;
+    -fx-border-color: #cdd4db;
+    -fx-border-width: 1px;
+    -fx-border-radius: 7px;
+    -fx-background-radius: 7px;
+    -fx-min-height: 36px;
+}
+
+.text-input {
+    -fx-padding: 7px 10px;
+    -fx-prompt-text-fill: #8b959e;
+}
+
+.text-field:focused,
+.password-field:focused,
+.combo-box-base:focused,
+.date-picker:focused {
+    -fx-border-color: #a32636;
+    -fx-background-color: white;
+}
+
+.combo-box > .list-cell {
+    -fx-padding: 7px 10px;
+    -fx-background-color: transparent;
+}
+
+.combo-box .arrow-button,
+.date-picker .arrow-button {
+    -fx-background-color: transparent;
+    -fx-background-radius: 0 7px 7px 0;
+}
+
+.combo-box .arrow,
+.date-picker .arrow-button .arrow {
+    -fx-background-color: #697580;
+}
+
+.date-picker > .text-field {
+    -fx-border-width: 0;
+    -fx-background-color: transparent;
+}
+
+.check-box {
+    -fx-text-fill: #3b4651;
+}
+
+.check-box .box {
+    -fx-background-color: white;
+    -fx-border-color: #bfc7cf;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+}
+
+.check-box:selected .box {
+    -fx-background-color: #a32636;
+    -fx-border-color: #a32636;
+}
+
+.list-view,
+.table-view {
+    -fx-background-color: white;
+    -fx-border-color: #d4dae0;
+    -fx-border-width: 1px;
+    -fx-border-radius: 7px;
+    -fx-background-radius: 7px;
+    -fx-padding: 0;
+}
+
+.list-cell {
+    -fx-background-color: white;
+    -fx-text-fill: #303b45;
+    -fx-padding: 9px 12px;
+    -fx-border-color: transparent transparent #edf0f2 transparent;
+    -fx-border-width: 0 0 1px 0;
+}
+
+.list-cell:odd {
+    -fx-background-color: #fafbfc;
+}
+
+.list-cell:filled:hover {
+    -fx-background-color: #f5e8ea;
+}
+
+.list-cell:filled:selected,
+.list-cell:filled:selected:hover {
+    -fx-background-color: #a32636;
+    -fx-text-fill: white;
+}
+
+.list-cell:filled:selected .label {
+    -fx-text-fill: white;
+}
+
+/* La cella chiusa di una ComboBox è tecnicamente "selezionata", ma deve
+ * conservare testo scuro sul proprio sfondo bianco. */
+.combo-box > .list-cell:filled:selected,
+.combo-box > .list-cell:filled:selected:hover {
+    -fx-background-color: transparent;
+    -fx-text-fill: #303b45;
+    -fx-border-color: transparent;
+}
+
+.combo-box > .list-cell:filled:selected .label {
+    -fx-text-fill: #303b45;
+}
+
+/* Le liste informative restano scorrevoli senza suggerire azioni sulle
+ * singole righe. */
+.list-view.read-only-list .list-cell:filled:hover,
+.list-view.read-only-list .list-cell:filled:selected,
+.list-view.read-only-list .list-cell:filled:selected:hover {
+    -fx-background-color: white;
+    -fx-text-fill: #303b45;
+}
+
+.list-view.read-only-list .list-cell:odd:filled:hover,
+.list-view.read-only-list .list-cell:odd:filled:selected,
+.list-view.read-only-list .list-cell:odd:filled:selected:hover {
+    -fx-background-color: #fafbfc;
+}
+
+.list-view.read-only-list .list-cell:filled:selected .label {
+    -fx-text-fill: #27313b;
+}
+
+.list-view .placeholder .label,
+.table-view .placeholder .label {
+    -fx-text-fill: #7a858f;
+    -fx-font-style: italic;
+}
+
+.table-view .column-header-background {
+    -fx-background-color: #e9edf1;
+    -fx-background-radius: 7px 7px 0 0;
+}
+
+.table-view .column-header,
+.table-view .filler {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent #d6dce2 #d6dce2 transparent;
+}
+
+.table-view .column-header .label {
+    -fx-font-weight: bold;
+    -fx-text-fill: #3d4853;
+    -fx-alignment: center;
+}
+
+.table-row-cell {
+    -fx-cell-size: 38px;
+    -fx-background-color: white;
+    -fx-border-color: transparent transparent #edf0f2 transparent;
+}
+
+.table-row-cell:odd {
+    -fx-background-color: #fafbfc;
+}
+
+.table-row-cell:selected {
+    -fx-background-color: #a32636;
+}
+
+.tab-pane > .tab-header-area {
+    -fx-padding: 0 0 0 6px;
+}
+
+.tab-pane > .tab-header-area > .tab-header-background {
+    -fx-background-color: #e9edf1;
+    -fx-border-color: transparent transparent #d6dce2 transparent;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 8px 12px;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab:hover {
+    -fx-background-color: #f4f6f8;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab:selected {
+    -fx-background-color: white;
+    -fx-border-color: #a32636 transparent transparent transparent;
+    -fx-border-width: 3px 0 0 0;
+    -fx-background-radius: 6px 6px 0 0;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab .tab-label {
+    -fx-text-fill: #56626d;
+    -fx-font-weight: 600;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab:selected .tab-label {
+    -fx-text-fill: #8f1f2e;
+}
+
+.tab-pane > .tab-content-area {
+    -fx-background-color: white;
+    -fx-border-color: #d6dce2;
+    -fx-border-width: 0 1px 1px 1px;
+}
+
+.split-pane {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.split-pane > .split-pane-divider {
+    -fx-background-color: #dfe4e8;
+    -fx-padding: 0 1px;
+}
+
+.scroll-pane {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.scroll-pane > .viewport {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar:horizontal,
+.scroll-bar:vertical {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar .thumb {
+    -fx-background-color: #bcc4cc;
+    -fx-background-radius: 8px;
+}
+
+.separator .line {
+    -fx-border-color: #dce1e6;
+    -fx-border-width: 1px 0 0 0;
+}
+
+.progress-bar {
+    -fx-accent: #a32636;
+}
+
+.progress-bar > .track {
+    -fx-background-color: #e2e6ea;
+    -fx-background-radius: 8px;
+}
+
+.progress-bar > .bar {
+    -fx-background-color: #a32636;
+    -fx-background-radius: 8px;
+    -fx-padding: 5px;
+}
+
+.progress-indicator {
+    -fx-progress-color: #a32636;
+}
+
+.tooltip {
+    -fx-background-color: #303942;
+    -fx-text-fill: white;
+    -fx-background-radius: 5px;
+    -fx-padding: 7px 9px;
+}
+
+.dialog-pane {
+    -fx-background-color: #f4f6f8;
+}
+
+.dialog-pane > .header-panel {
+    -fx-background-color: white;
+    -fx-border-color: transparent transparent #d9dee4 transparent;
+}
+
+.dialog-pane > .button-bar > .container {
+    -fx-background-color: #f4f6f8;
+}

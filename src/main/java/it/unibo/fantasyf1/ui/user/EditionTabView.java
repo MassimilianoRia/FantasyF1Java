@@ -7,6 +7,7 @@ import it.unibo.fantasyf1.model.Edizione;
 import it.unibo.fantasyf1.model.EnrolledConstructorOption;
 import it.unibo.fantasyf1.model.RaceWeekend;
 import it.unibo.fantasyf1.service.ApplicationServices;
+import it.unibo.fantasyf1.ui.UiTheme;
 
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
@@ -104,8 +105,9 @@ final class EditionTabView {
 
     private void configure() {
         root.setPadding(new Insets(12));
+        root.getStyleClass().add("feature-root");
 
-        title.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+        title.getStyleClass().add("section-title");
         summary.setWrapText(true);
         progress.setPrefWidth(360);
         progress.setMaxWidth(Double.MAX_VALUE);
@@ -129,6 +131,9 @@ final class EditionTabView {
                 constructor.carName()
             )
         );
+        UiTheme.configureReadOnly(weekends);
+        UiTheme.configureReadOnly(drivers);
+        UiTheme.configureReadOnly(constructors);
 
         weekends.setPlaceholder(new Label("Nessun GP previsto."));
         drivers.setPlaceholder(new Label("Nessun pilota iscritto."));
@@ -146,12 +151,7 @@ final class EditionTabView {
 
         final VBox summaryBox = new VBox(7, summary, progress);
         summaryBox.setPadding(new Insets(12));
-        summaryBox.setStyle(
-            "-fx-background-color: #f7f7f7;"
-                + "-fx-border-color: #d7d7d7;"
-                + "-fx-border-radius: 5;"
-                + "-fx-background-radius: 5;"
-        );
+        summaryBox.getStyleClass().add("summary-card");
 
         final TabPane details = new TabPane(
             detailTab(

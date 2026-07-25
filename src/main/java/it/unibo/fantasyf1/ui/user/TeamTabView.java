@@ -7,6 +7,7 @@ import it.unibo.fantasyf1.model.TeamDriver;
 import it.unibo.fantasyf1.model.TeamSummary;
 import it.unibo.fantasyf1.model.WeekendScoreRow;
 import it.unibo.fantasyf1.service.ApplicationServices;
+import it.unibo.fantasyf1.ui.UiTheme;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
@@ -88,6 +89,7 @@ final class TeamTabView {
         VBox.setVgrow(tabs, Priority.ALWAYS);
         root.getChildren().add(tabs);
         root.setPadding(new Insets(10, 0, 0, 0));
+        root.getStyleClass().add("feature-root");
     }
 
     Node content() {
@@ -137,6 +139,8 @@ final class TeamTabView {
             RaceWeekend::toString
         );
         scoreRows.setCellFactory(ignored -> new WeekendScoreCell());
+        UiTheme.configureReadOnly(rosterList);
+        UiTheme.configureReadOnly(scoreRows);
 
         teamList.getSelectionModel().selectedItemProperty().addListener(
             (observable, previous, selected) -> showTeam(selected)
@@ -165,6 +169,8 @@ final class TeamTabView {
 
         createTeam.setOnAction(event -> createTeam());
         loadScores.setOnAction(event -> loadWeekendScores());
+        createTeam.getStyleClass().add("primary-button");
+        loadScores.getStyleClass().add("primary-button");
         updateCreateAvailability();
         updateScoreAvailability();
     }
@@ -465,6 +471,7 @@ final class TeamTabView {
     private static BorderPane padded(final Node content) {
         final BorderPane pane = new BorderPane(content);
         pane.setPadding(new Insets(12));
+        pane.getStyleClass().add("content-pane");
         return pane;
     }
 
@@ -476,8 +483,8 @@ final class TeamTabView {
         private final VBox content = new VBox(4, driverAndPoints, performance);
 
         WeekendScoreCell() {
-            driverAndPoints.setStyle("-fx-font-weight: bold;");
-            performance.setStyle("-fx-text-fill: #4f5963;");
+            driverAndPoints.getStyleClass().add("form-label");
+            performance.getStyleClass().add("muted");
             performance.setWrapText(true);
             content.setPadding(new Insets(4, 2, 4, 2));
         }
@@ -539,6 +546,7 @@ final class TeamTabView {
             HBox.setHgrow(spacer, Priority.ALWAYS);
             toggle.setMinWidth(38);
             toggle.setFocusTraversable(true);
+            toggle.getStyleClass().add("compact-button");
             content = new HBox(10, description, spacer, toggle);
             content.setAlignment(Pos.CENTER_LEFT);
 
@@ -601,11 +609,7 @@ final class TeamTabView {
             toggle.setDisable(
                 !selected && selection.getSelectedItems().size() >= 4
             );
-            content.setStyle(
-                selected
-                    ? "-fx-background-color: #e8f3ff; -fx-padding: 5px;"
-                    : "-fx-padding: 5px;"
-            );
+            content.setStyle("-fx-padding: 5px;");
         }
     }
 

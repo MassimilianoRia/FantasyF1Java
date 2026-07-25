@@ -31,8 +31,6 @@ import java.util.Objects;
  */
 public final class UserApplicationView implements AutoCloseable {
 
-    private static final String ERROR_STYLE = "-fx-text-fill: #b00020;";
-    private static final String SUCCESS_STYLE = "-fx-text-fill: #176b2c;";
     private static final String TEST_USERNAME = "UtenteDefault";
     private static final String TEST_PASSWORD = "utentedefault";
 
@@ -67,12 +65,14 @@ public final class UserApplicationView implements AutoCloseable {
 
     private void showAuthentication() {
         final Label title = new Label("Fantasy Formula 1");
-        title.setStyle("-fx-font-size: 28px; -fx-font-weight: bold;");
+        title.getStyleClass().add("page-title");
         final Label subtitle = new Label(
             "Accedi oppure crea un account per gestire team e leghe."
         );
+        subtitle.getStyleClass().add("muted");
         final Label status = new Label("Inserisci le tue credenziali.");
         status.setWrapText(true);
+        status.getStyleClass().add("status-note");
 
         final TextField loginUsername = new TextField();
         loginUsername.setPromptText("Username");
@@ -81,6 +81,7 @@ public final class UserApplicationView implements AutoCloseable {
         final Button loginButton = new Button("Accedi");
         loginButton.setDefaultButton(true);
         final Button skipButton = new Button("Salta");
+        loginButton.getStyleClass().add("primary-button");
 
         final GridPane loginForm = formGrid();
         loginForm.addRow(0, new Label("Username"), loginUsername);
@@ -100,6 +101,7 @@ public final class UserApplicationView implements AutoCloseable {
         email.setPromptText("nome@example.com");
         phone.setPromptText("+39 333 1234567");
         final Button registerButton = new Button("Crea account");
+        registerButton.getStyleClass().add("primary-button");
 
         final GridPane registrationForm = formGrid();
         registrationForm.addRow(0, new Label("Nome"), firstName);
@@ -191,16 +193,13 @@ public final class UserApplicationView implements AutoCloseable {
         final VBox card = new VBox(12, title, subtitle, authTabs, status);
         card.setAlignment(Pos.CENTER_LEFT);
         card.setMaxWidth(620);
+        card.setMaxHeight(Region.USE_PREF_SIZE);
         card.setPadding(new Insets(28));
-        card.setStyle(
-            "-fx-background-color: white;"
-                + "-fx-border-color: #d7d7d7;"
-                + "-fx-border-radius: 6;"
-                + "-fx-background-radius: 6;"
-        );
+        card.getStyleClass().addAll("card", "mode-card");
 
         final BorderPane root = new BorderPane(card);
         root.setPadding(new Insets(32));
+        root.getStyleClass().add("app-root");
         BorderPane.setAlignment(card, Pos.CENTER);
         final Button changeMode = createChangeModeButton();
         changeMode.disableProperty().bind(authTabs.disableProperty());
@@ -244,15 +243,18 @@ public final class UserApplicationView implements AutoCloseable {
     private void showDashboard(final UserSession session) {
         final BorderPane root = new BorderPane();
         root.setPadding(new Insets(16));
+        root.getStyleClass().add("app-root");
 
         final Label title = new Label("Fantasy Formula 1");
-        title.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
+        title.getStyleClass().add("page-title");
         final Label user = new Label("Utente: " + session.username());
+        user.getStyleClass().add("user-pill");
         final ComboBox<Edizione> editionCombo = new ComboBox<>();
         editionCombo.setPromptText("Seleziona edizione");
         editionCombo.setPrefWidth(220);
         final Button refreshEditions = new Button("Aggiorna");
         final Button logout = new Button("Esci");
+        logout.getStyleClass().add("danger-button");
 
         final Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -267,11 +269,12 @@ public final class UserApplicationView implements AutoCloseable {
             logout
         );
         header.setAlignment(Pos.CENTER_LEFT);
-        header.setPadding(new Insets(0, 0, 12, 0));
+        header.setPadding(new Insets(12, 14, 12, 14));
+        header.getStyleClass().add("app-header");
 
         dashboardStatus = new Label("Caricamento delle edizioni…");
         dashboardStatus.setWrapText(true);
-        dashboardStatus.setPadding(new Insets(10, 0, 0, 0));
+        dashboardStatus.getStyleClass().add("status-bar");
 
         teamView = new TeamTabView(
             services,
@@ -299,6 +302,7 @@ public final class UserApplicationView implements AutoCloseable {
         root.setTop(header);
         root.setCenter(sections);
         root.setBottom(dashboardStatus);
+        BorderPane.setMargin(sections, new Insets(14, 0, 12, 0));
 
         final boolean[] updatingEditions = {false};
         editionCombo.valueProperty().addListener(
@@ -430,6 +434,7 @@ public final class UserApplicationView implements AutoCloseable {
         grid.setHgap(12);
         grid.setVgap(10);
         grid.setPadding(new Insets(18));
+        grid.getStyleClass().add("form-grid");
         return grid;
     }
 
@@ -439,7 +444,8 @@ public final class UserApplicationView implements AutoCloseable {
         final boolean error
     ) {
         label.setText(message);
-        label.setStyle(error ? ERROR_STYLE : SUCCESS_STYLE);
+        label.getStyleClass().removeAll("error-text", "success-text");
+        label.getStyleClass().add(error ? "error-text" : "success-text");
     }
 
     @Override
