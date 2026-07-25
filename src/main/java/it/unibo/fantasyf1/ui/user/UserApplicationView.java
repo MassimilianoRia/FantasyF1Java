@@ -42,6 +42,7 @@ public final class UserApplicationView implements AutoCloseable {
     private Label dashboardStatus;
     private TeamTabView teamView;
     private LeagueTabView leagueView;
+    private EditionTabView editionView;
     private boolean active;
 
     public UserApplicationView(
@@ -253,11 +254,16 @@ public final class UserApplicationView implements AutoCloseable {
         );
         leagueView =
             new LeagueTabView(services, tasks, this::dashboardStatus);
+        editionView =
+            new EditionTabView(services, tasks, this::dashboardStatus);
         final Tab teamTab = new Tab("Team", teamView.content());
         final Tab leagueTab = new Tab("Leghe", leagueView.content());
+        final Tab editionTab = new Tab("Edizione", editionView.content());
         teamTab.setClosable(false);
         leagueTab.setClosable(false);
-        final TabPane sections = new TabPane(teamTab, leagueTab);
+        editionTab.setClosable(false);
+        final TabPane sections =
+            new TabPane(teamTab, leagueTab, editionTab);
 
         root.setTop(header);
         root.setCenter(sections);
@@ -344,6 +350,7 @@ public final class UserApplicationView implements AutoCloseable {
         sections.setDisable(!available);
         teamView.setEdition(edition);
         leagueView.setEdition(edition);
+        editionView.setEdition(edition);
         if (available) {
             dashboardStatus(
                 "Edizione %d selezionata.".formatted(edition.anno()),
@@ -409,5 +416,6 @@ public final class UserApplicationView implements AutoCloseable {
         active = false;
         teamView = null;
         leagueView = null;
+        editionView = null;
     }
 }

@@ -249,6 +249,18 @@ final class WeekendProcessingH2Test {
                 .sorted()
                 .toList()
         );
+        for (WeekendScoreRow row : breakdown) {
+            final int driverIndex = weekend.driverIds().indexOf(row.driverId());
+            assertTrue(driverIndex >= 0);
+            final PerformanceData performance = performances.get(driverIndex);
+            assertEquals(
+                performance.qualifyingPosition(),
+                row.qualifyingPosition()
+            );
+            assertEquals(performance.racePosition(), row.racePosition());
+            assertEquals(performance.penalized(), row.penalized());
+            assertEquals(performance.fastestLap(), row.fastestLap());
+        }
 
         final AppException secondConclusion = assertThrows(
             AppException.class,

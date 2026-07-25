@@ -1,12 +1,12 @@
 -- Popolamento completo per test funzionali e di volume.
 --
 -- Lo script rispecchia la stima della relazione:
---   5 edizioni, 40 piloti, 98 iscrizioni pilota,
---   15 scuderie, 49 iscrizioni scuderia,
---   30 Gran Premi, 118 weekend,
+--   5 edizioni, 40 piloti, 100 iscrizioni pilota,
+--   15 scuderie, 50 iscrizioni scuderia,
+--   30 Gran Premi, 120 weekend,
 --   1001 utenti, 1502 team, 201 leghe,
 --   6008 componenti, 1501 partecipazioni,
---   2280 prestazioni e 34840 risultati team.
+--   2360 prestazioni e 35444 risultati team.
 --
 -- Nomi di piloti, scuderie, Gran Premi e circuiti sono usati per rendere
 -- leggibile il dataset. Calendari, schieramenti e risultati sono invece
@@ -193,8 +193,8 @@ VALUES
 
 START TRANSACTION;
 
--- Le edizioni 2021-2024 sono complete. Il 2025 resta intenzionalmente
--- incompleto per provare il popolamento progressivo dalla modalità admin.
+-- Tutte le edizioni sono complete a livello di calendario, scuderie e piloti.
+-- Nel 2025 restano da concludere soltanto gli ultimi due weekend.
 INSERT INTO EDIZIONE (IdEdizione, NumeroEdizione, Anno)
 VALUES
     (1, 1, 2021),
@@ -364,7 +364,7 @@ VALUES (
     '3476334034'
 );
 
--- Ventiquattro weekend conclusi per il 2021-2024. Nel 2025 i primi venti
+-- Ventiquattro weekend conclusi per il 2021-2024. Nel 2025 i primi ventidue
 -- hanno risultati ufficiali convalidati e gli ultimi due restano aperti.
 -- Risalendo nel tempo la finestra si sposta di tre GP per stagione.
 INSERT INTO WEEKEND_DI_GARA (
@@ -387,15 +387,15 @@ SELECT
         STR_TO_DATE(CONCAT(E.Anno, '-03-01'), '%Y-%m-%d'),
         INTERVAL ((NUM.N - 1) * 12 + 2) DAY
     ),
-    E.IdEdizione <> 5 OR NUM.N <= 20
+    E.IdEdizione <> 5 OR NUM.N <= 22
 FROM EDIZIONE AS E
 JOIN _SEED_NUMERO AS NUM
-    ON NUM.N <= CASE WHEN E.IdEdizione = 5 THEN 22 ELSE 24 END
+    ON NUM.N <= 24
 JOIN GRAN_PREMIO AS G
     ON G.IdGranPremio =
         MOD((5 - E.IdEdizione) * 3 + NUM.N - 1, 30) + 1;
 
--- Dieci scuderie nelle edizioni concluse e nove nel 2025.
+-- Dieci scuderie per ogni edizione.
 INSERT INTO SCUDERIA_ISCRITTA (
     IdEdizione,
     IdScuderia,
@@ -409,13 +409,12 @@ SELECT
     CONCAT('F1-', E.Anno, '-', LPAD(S.IdScuderia, 2, '0'))
 FROM EDIZIONE AS E
 JOIN _SEED_NUMERO AS NUM
-    ON NUM.N <= CASE WHEN E.IdEdizione = 5 THEN 9 ELSE 10 END
+    ON NUM.N <= 10
 JOIN SCUDERIA AS S
     ON S.IdScuderia =
         MOD((5 - E.IdEdizione) * 2 + NUM.N - 1, 15) + 1;
 
--- Venti piloti per edizione conclusa e diciotto nel 2025, sempre due per
--- ciascuna scuderia iscritta.
+-- Venti piloti per ogni edizione, sempre due per ciascuna scuderia iscritta.
 -- Le finestre adiacenti condividono 15 piloti: la ricorrenza è intenzionale
 -- e permette di verificare correttamente lo storico.
 INSERT INTO PILOTA_ISCRITTO (
@@ -451,7 +450,7 @@ SELECT
     ) + 1
 FROM EDIZIONE AS E
 JOIN _SEED_NUMERO AS NUM
-    ON NUM.N <= CASE WHEN E.IdEdizione = 5 THEN 18 ELSE 20 END
+    ON NUM.N <= 20
 JOIN PILOTA AS P
     ON P.IdPilota = (5 - E.IdEdizione) * 5 + NUM.N;
 
@@ -620,24 +619,16 @@ FROM (
         P4.N AS P4
     FROM EDIZIONE AS E
     JOIN _SEED_POSIZIONE_1 AS P1
-        ON P1.N <= CASE
-            WHEN E.IdEdizione = 5 THEN 18 ELSE 20
-        END
+        ON P1.N <= 20
     JOIN _SEED_POSIZIONE_2 AS P2
         ON P2.N > P1.N
-        AND P2.N <= CASE
-            WHEN E.IdEdizione = 5 THEN 18 ELSE 20
-        END
+        AND P2.N <= 20
     JOIN _SEED_POSIZIONE_3 AS P3
         ON P3.N > P2.N
-        AND P3.N <= CASE
-            WHEN E.IdEdizione = 5 THEN 18 ELSE 20
-        END
+        AND P3.N <= 20
     JOIN _SEED_POSIZIONE_4 AS P4
         ON P4.N > P3.N
-        AND P4.N <= CASE
-            WHEN E.IdEdizione = 5 THEN 18 ELSE 20
-        END
+        AND P4.N <= 20
 ) AS COMBINAZIONE;
 
 INSERT INTO COMPOSIZIONE_TEAM (
@@ -679,8 +670,8 @@ VALUES
     (5, 10, 1502),
     (5, 14, 1502);
 
--- Tutte le prestazioni delle edizioni concluse. Per il 2025 sono compilati
--- solo i primi venti dei ventidue weekend presenti: gli ultimi due restano
+-- Tutte le prestazioni dei weekend conclusi. Per il 2025 sono compilati
+-- solo i primi ventidue dei ventiquattro weekend presenti: gli ultimi due restano
 -- senza risultati per il test manuale di A8. Qualifica e gara sono
 -- permutazioni pseudocasuali ma ripetibili, così i punteggi dei piloti e
 -- delle rose risultano distribuiti meglio. PunteggioFantasy applica la policy:
@@ -789,7 +780,7 @@ INSERT INTO PARTECIPAZIONE_TEAM (IdLega, IdTeam)
 VALUES (201, 1502);
 
 -- O2: risultati completi per 24 weekend nelle edizioni 2021-2024 e per i
--- primi 20 weekend del 2025, inclusi i due team manuali di Max.
+-- primi 22 weekend del 2025, inclusi i due team manuali di Max.
 INSERT INTO RISULTATO_TEAM (
     IdEdizione,
     IdGranPremio,
@@ -867,8 +858,8 @@ SELECT
     (SELECT COUNT(*) FROM PRESTAZIONE_WEEKEND) AS Prestazioni,
     (SELECT COUNT(*) FROM RISULTATO_TEAM) AS RisultatiTeam;
 
--- Completezza per edizione. Il 2025 mostra intenzionalmente
--- 22 weekend, 9 scuderie, 18 piloti e risultati per soli 20 GP.
+-- Completezza per edizione. Il 2025 ha 24 weekend, 10 scuderie e 20 piloti;
+-- i risultati sono presenti per i 22 GP conclusi.
 SELECT
     E.Anno,
     (SELECT COUNT(*)

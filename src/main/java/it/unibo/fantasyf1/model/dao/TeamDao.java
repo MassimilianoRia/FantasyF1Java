@@ -88,6 +88,10 @@ public final class TeamDao {
             P.Nome,
             P.Cognome,
             PI.SiglaGara,
+            PW.PosizionamentoQualifica,
+            PW.PosizionamentoGara,
+            PW.Penalizzato,
+            PW.RegistraGiroVeloce,
             PW.PunteggioFantasy
         FROM TEAM_FANTASY TF
         JOIN RISULTATO_TEAM RT
@@ -290,6 +294,10 @@ public final class TeamDao {
                         result.getString("Nome"),
                         result.getString("Cognome"),
                         result.getString("SiglaGara"),
+                        nullableInt(result, "PosizionamentoQualifica"),
+                        nullableInt(result, "PosizionamentoGara"),
+                        result.getBoolean("Penalizzato"),
+                        result.getBoolean("RegistraGiroVeloce"),
                         nullableInt(result, "PunteggioFantasy")
                     ));
                 }

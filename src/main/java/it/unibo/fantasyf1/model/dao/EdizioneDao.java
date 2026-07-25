@@ -9,6 +9,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Accesso JDBC alle edizioni del campionato.
@@ -19,6 +20,12 @@ public final class EdizioneDao {
         SELECT IdEdizione, NumeroEdizione, Anno
         FROM EDIZIONE
         ORDER BY Anno DESC
+        """;
+
+    private static final String FIND_BY_ID = """
+        SELECT IdEdizione, NumeroEdizione, Anno
+        FROM EDIZIONE
+        WHERE IdEdizione = ?
         """;
 
     public List<Edizione> findAll() throws SQLException {
@@ -52,5 +59,25 @@ public final class EdizioneDao {
             }
         }
         return List.copyOf(editions);
+    }
+
+    public Optional<Edizione> findById(
+        final Connection connection,
+        final int editionId
+    ) throws SQLException {
+        try (PreparedStatement statement =
+                 connection.prepareStatement(FIND_BY_ID)) {
+            statement.setInt(1, editionId);
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) {
+                    return Optional.empty();
+                }
+                return Optional.of(new Edizione(
+                    result.getInt("IdEdizione"),
+                    result.getInt("NumeroEdizione"),
+                    result.getInt("Anno")
+                ));
+            }
+        }
     }
 }

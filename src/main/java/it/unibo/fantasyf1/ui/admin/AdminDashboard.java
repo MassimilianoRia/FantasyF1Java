@@ -10,6 +10,7 @@ import it.unibo.fantasyf1.model.Edizione;
 import it.unibo.fantasyf1.model.EnrolledConstructorOption;
 import it.unibo.fantasyf1.model.GrandPrixOption;
 import it.unibo.fantasyf1.model.RaceWeekend;
+import it.unibo.fantasyf1.model.WeekendPerformanceStatus;
 import it.unibo.fantasyf1.service.AdminService;
 import it.unibo.fantasyf1.service.PerformanceRequest;
 
@@ -28,6 +29,8 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.ScrollPane;
@@ -146,10 +149,34 @@ public final class AdminDashboard {
         "Nessuna prestazione registrata in questa sessione."
     );
 
+    private final Label editionOverviewSummary = new Label(
+        "Seleziona un'edizione per confrontare dati presenti e mancanti."
+    );
+    private final ListView<RaceWeekend> editionWeekendList =
+        new ListView<>();
+    private final ListView<GrandPrixOption> availableGrandPrixList =
+        new ListView<>();
+    private final ListView<EnrolledConstructorOption>
+        editionConstructorList = new ListView<>();
+    private final ListView<ConstructorOption> availableConstructorList =
+        new ListView<>();
+    private final ListView<DriverOption> editionDriverList =
+        new ListView<>();
+    private final ListView<DriverRegistryOption> availableDriverList =
+        new ListView<>();
+    private final ComboBox<RaceWeekend> overviewPerformanceWeekendCombo =
+        new ComboBox<>();
+    private final Label overviewPerformanceSummary = new Label(
+        "Seleziona un GP per verificare le prestazioni."
+    );
+    private final ListView<WeekendPerformanceStatus>
+        overviewPerformanceList = new ListView<>();
+
     private List<GrandPrixOption> grandPrixCatalog = List.of();
     private List<ConstructorOption> constructorCatalog = List.of();
     private List<DriverRegistryOption> driverCatalog = List.of();
     private boolean updatingEditionSelection;
+    private boolean updatingOverviewPerformanceSelection;
 
     public AdminDashboard(
         final AdminService admin,
@@ -190,6 +217,10 @@ public final class AdminDashboard {
         );
         configureCombo(performanceWeekendCombo, "Seleziona un weekend");
         configureCombo(performanceDriverCombo, "Seleziona un pilota iscritto");
+        configureCombo(
+            overviewPerformanceWeekendCombo,
+            "Seleziona un GP da controllare"
+        );
 
         editionNumberField.setPromptText("es. 2");
         editionYearField.setPromptText("es. 2026");
@@ -267,6 +298,55 @@ public final class AdminDashboard {
                 );
                 updatePerformanceWeekendState(selected);
             }
+        );
+        overviewPerformanceWeekendCombo.valueProperty().addListener(
+            (observable, previous, selected) -> {
+                if (!updatingOverviewPerformanceSelection) {
+                    refreshOverviewPerformanceStatus();
+                }
+            }
+        );
+        overviewPerformanceList.setCellFactory(ignored ->
+            new ListCell<>() {
+                @Override
+                protected void updateItem(
+                    final WeekendPerformanceStatus item,
+                    final boolean empty
+                ) {
+                    super.updateItem(item, empty);
+                    setText(empty || item == null ? null : item.toString());
+                    setStyle(
+                        empty || item == null
+                            ? ""
+                            : item.recorded()
+                                ? "-fx-text-fill: #176b2c;"
+                                : "-fx-text-fill: #b00020;"
+                    );
+                }
+            }
+        );
+        editionOverviewSummary.setWrapText(true);
+        overviewPerformanceSummary.setWrapText(true);
+        editionWeekendList.setPlaceholder(
+            new Label("Nessun GP inserito nell'edizione.")
+        );
+        availableGrandPrixList.setPlaceholder(
+            new Label("Nessun GP anagrafico disponibile.")
+        );
+        editionConstructorList.setPlaceholder(
+            new Label("Nessuna scuderia iscritta.")
+        );
+        availableConstructorList.setPlaceholder(
+            new Label("Nessuna scuderia anagrafica disponibile.")
+        );
+        editionDriverList.setPlaceholder(
+            new Label("Nessun pilota iscritto.")
+        );
+        availableDriverList.setPlaceholder(
+            new Label("Nessun pilota anagrafico disponibile.")
+        );
+        overviewPerformanceList.setPlaceholder(
+            new Label("Nessun pilota iscritto da verificare.")
         );
         refreshButton.setOnAction(
             event -> refreshAll(selectedEditionId(), "Cataloghi aggiornati.")
@@ -365,6 +445,11 @@ public final class AdminDashboard {
     private Node createTabs() {
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         tabs.getTabs().addAll(
+            createTab(
+                "Stato edizione",
+                createEditionOverview(),
+                false
+            ),
             createTab("A1 · Edizione", createEditionForm(), false),
             createTab("A2 · Gran Premio", createGrandPrixForm(), false),
             createTab("A3 · Weekend", createWeekendForm(), true),
@@ -396,6 +481,124 @@ public final class AdminDashboard {
             editionScopedTabs.add(tab);
         }
         return tab;
+    }
+
+    private Node createEditionOverview() {
+        final Label title = new Label(
+            "Contenuto e completezza dell'edizione"
+        );
+        title.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
+        final Label description = new Label(
+            "Confronta ciò che è già presente con gli elementi anagrafici "
+                + "ancora aggiungibili e controlla le prestazioni di ogni GP."
+        );
+        description.setWrapText(true);
+
+        final TabPane overviewTabs = new TabPane(
+            overviewTab(
+                "Calendario",
+                comparisonPane(
+                    "GP previsti nell'edizione",
+                    editionWeekendList,
+                    "GP in catalogo non ancora inseriti",
+                    availableGrandPrixList
+                )
+            ),
+            overviewTab(
+                "Scuderie",
+                comparisonPane(
+                    "Scuderie iscritte",
+                    editionConstructorList,
+                    "Scuderie anagrafiche non iscritte",
+                    availableConstructorList
+                )
+            ),
+            overviewTab(
+                "Piloti",
+                comparisonPane(
+                    "Piloti iscritti",
+                    editionDriverList,
+                    "Piloti anagrafici non iscritti",
+                    availableDriverList
+                )
+            ),
+            overviewTab(
+                "Prestazioni GP",
+                createPerformanceOverview()
+            )
+        );
+        overviewTabs.setTabClosingPolicy(
+            TabPane.TabClosingPolicy.UNAVAILABLE
+        );
+        VBox.setVgrow(overviewTabs, Priority.ALWAYS);
+
+        final VBox content = new VBox(
+            12,
+            title,
+            description,
+            editionOverviewSummary,
+            new Separator(),
+            overviewTabs
+        );
+        content.setPadding(new Insets(20));
+        return content;
+    }
+
+    private Node createPerformanceOverview() {
+        final Label selectorLabel = new Label("Gran Premio:");
+        selectorLabel.setStyle("-fx-font-weight: bold;");
+        final HBox selector = new HBox(
+            10,
+            selectorLabel,
+            overviewPerformanceWeekendCombo
+        );
+        selector.setAlignment(Pos.CENTER_LEFT);
+
+        final VBox content = new VBox(
+            12,
+            selector,
+            overviewPerformanceSummary,
+            overviewPerformanceList
+        );
+        content.setPadding(new Insets(14));
+        VBox.setVgrow(overviewPerformanceList, Priority.ALWAYS);
+        return content;
+    }
+
+    private static Node comparisonPane(
+        final String presentTitle,
+        final ListView<?> present,
+        final String availableTitle,
+        final ListView<?> available
+    ) {
+        final VBox presentBox = listBox(presentTitle, present);
+        final VBox availableBox = listBox(availableTitle, available);
+        HBox.setHgrow(presentBox, Priority.ALWAYS);
+        HBox.setHgrow(availableBox, Priority.ALWAYS);
+        presentBox.setMaxWidth(Double.MAX_VALUE);
+        availableBox.setMaxWidth(Double.MAX_VALUE);
+
+        final HBox content = new HBox(14, presentBox, availableBox);
+        content.setPadding(new Insets(14));
+        return content;
+    }
+
+    private static VBox listBox(
+        final String title,
+        final ListView<?> list
+    ) {
+        final Label label = new Label(title);
+        label.setStyle("-fx-font-weight: bold;");
+        final VBox box = new VBox(8, label, list);
+        VBox.setVgrow(list, Priority.ALWAYS);
+        return box;
+    }
+
+    private static Tab overviewTab(
+        final String title,
+        final Node content
+    ) {
+        return new Tab(title, content);
     }
 
     private Node createEditionForm() {
@@ -1029,6 +1232,7 @@ public final class AdminDashboard {
                 }
                 applyEditionCatalogs(catalogs);
                 setOperationStatus(successMessage, false);
+                refreshOverviewPerformanceStatus();
             }
         );
     }
@@ -1104,6 +1308,12 @@ public final class AdminDashboard {
             grandPrixCatalog.stream()
                 .filter(option -> !scheduledGrandPrix.contains(option.id()))
                 .toList();
+        editionWeekendList.setItems(
+            FXCollections.observableArrayList(catalogs.weekends())
+        );
+        availableGrandPrixList.setItems(
+            FXCollections.observableArrayList(availableGrandPrix)
+        );
         replaceItems(
             weekendGrandPrixCombo,
             availableGrandPrix,
@@ -1121,6 +1331,14 @@ public final class AdminDashboard {
                     option -> !enrolledConstructorIds.contains(option.id())
                 )
                 .toList();
+        editionConstructorList.setItems(
+            FXCollections.observableArrayList(
+                catalogs.enrolledConstructors()
+            )
+        );
+        availableConstructorList.setItems(
+            FXCollections.observableArrayList(availableConstructors)
+        );
         replaceItems(
             constructorEnrollmentCombo,
             availableConstructors,
@@ -1140,6 +1358,12 @@ public final class AdminDashboard {
             driverCatalog.stream()
                 .filter(option -> !enrolledDriverIds.contains(option.id()))
                 .toList();
+        editionDriverList.setItems(
+            FXCollections.observableArrayList(catalogs.enrolledDrivers())
+        );
+        availableDriverList.setItems(
+            FXCollections.observableArrayList(availableDrivers)
+        );
         replaceItems(
             driverEnrollmentCombo,
             availableDrivers,
@@ -1155,8 +1379,83 @@ public final class AdminDashboard {
             catalogs.weekends(),
             RaceWeekend::grandPrixId
         );
+        updatingOverviewPerformanceSelection = true;
+        try {
+            replaceItems(
+                overviewPerformanceWeekendCombo,
+                catalogs.weekends(),
+                RaceWeekend::grandPrixId
+            );
+            selectFirstIfEmpty(overviewPerformanceWeekendCombo);
+        } finally {
+            updatingOverviewPerformanceSelection = false;
+        }
         selectFirstIfEmpty(performanceDriverCombo);
         selectFirstIfEmpty(performanceWeekendCombo);
+    }
+
+    private void refreshOverviewPerformanceStatus() {
+        final Edizione edition = editionCombo.getValue();
+        final RaceWeekend weekend =
+            overviewPerformanceWeekendCombo.getValue();
+        if (edition == null || weekend == null) {
+            overviewPerformanceList.getItems().clear();
+            overviewPerformanceSummary.setText(
+                "Nessun GP disponibile da controllare."
+            );
+            return;
+        }
+        overviewPerformanceList.getItems().clear();
+        overviewPerformanceSummary.setText(
+            "Controllo delle prestazioni in corso…"
+        );
+        execute(
+            "controllo-prestazioni",
+            "Controllo delle prestazioni di "
+                + weekend.grandPrixName()
+                + "…",
+            () -> admin.weekendPerformanceStatus(
+                edition.id(),
+                weekend.grandPrixId()
+            ),
+            statuses -> {
+                final Edizione currentEdition = editionCombo.getValue();
+                final RaceWeekend currentWeekend =
+                    overviewPerformanceWeekendCombo.getValue();
+                if (
+                    currentEdition == null
+                        || currentWeekend == null
+                        || currentEdition.id() != edition.id()
+                        || currentWeekend.grandPrixId()
+                            != weekend.grandPrixId()
+                ) {
+                    return;
+                }
+                overviewPerformanceList.setItems(
+                    FXCollections.observableArrayList(statuses)
+                );
+                final long recorded = statuses.stream()
+                    .filter(WeekendPerformanceStatus::recorded)
+                    .count();
+                final long missing = statuses.size() - recorded;
+                overviewPerformanceSummary.setText(
+                    "%s · %d/%d prestazioni registrate · %d mancanti · %s"
+                        .formatted(
+                            weekend.grandPrixName(),
+                            recorded,
+                            statuses.size(),
+                            missing,
+                            weekend.concluded()
+                                ? "GP concluso"
+                                : "GP non concluso"
+                        )
+                );
+                setOperationStatus(
+                    "Controllo prestazioni aggiornato.",
+                    false
+                );
+            }
+        );
     }
 
     private void updatePerformanceWeekendState(
@@ -1197,6 +1496,21 @@ public final class AdminDashboard {
                 + "%d/10 scuderie con due piloti"
                     .formatted(status.constructorsWithTwoDrivers())
         );
+        editionOverviewSummary.setText(
+            status.complete()
+                ? "Edizione completa: tutti i 24 GP, le 10 scuderie e i "
+                    + "20 piloti sono presenti."
+                : "Popolamento in corso: mancano %d GP, %d scuderie e "
+                    .formatted(
+                        Math.max(0, 24 - status.weekends()),
+                        Math.max(0, 10 - status.constructors())
+                    )
+                    + "%d piloti. %d/10 scuderie hanno già due piloti."
+                        .formatted(
+                            Math.max(0, 20 - status.drivers()),
+                            status.constructorsWithTwoDrivers()
+                        )
+        );
         final double completed = Math.min(status.weekends(), 24)
             + Math.min(status.constructors(), 10)
             + Math.min(status.drivers(), 20)
@@ -1217,6 +1531,26 @@ public final class AdminDashboard {
         enrolledConstructorCombo.getItems().clear();
         performanceDriverCombo.getItems().clear();
         performanceWeekendCombo.getItems().clear();
+        editionWeekendList.getItems().clear();
+        availableGrandPrixList.getItems().clear();
+        editionConstructorList.getItems().clear();
+        availableConstructorList.getItems().clear();
+        editionDriverList.getItems().clear();
+        availableDriverList.getItems().clear();
+        updatingOverviewPerformanceSelection = true;
+        try {
+            overviewPerformanceWeekendCombo.getItems().clear();
+            overviewPerformanceWeekendCombo.setValue(null);
+        } finally {
+            updatingOverviewPerformanceSelection = false;
+        }
+        overviewPerformanceList.getItems().clear();
+        editionOverviewSummary.setText(
+            "Seleziona un'edizione per confrontare dati presenti e mancanti."
+        );
+        overviewPerformanceSummary.setText(
+            "Seleziona un GP per verificare le prestazioni."
+        );
         completionTitle.setText("Nessuna edizione selezionata");
         completionDetail.setText(
             "Crea o seleziona un'edizione per visualizzarne lo stato."

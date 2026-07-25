@@ -136,16 +136,7 @@ final class TeamTabView {
             scoreWeekend,
             RaceWeekend::toString
         );
-        UserViewSupport.renderList(
-            scoreRows,
-            row -> "%s — %s %s: %s punti".formatted(
-                row.code(),
-                row.firstName(),
-                row.lastName(),
-                row.fantasyPoints() == null ? "non calcolato"
-                    : row.fantasyPoints()
-            )
-        );
+        scoreRows.setCellFactory(ignored -> new WeekendScoreCell());
 
         teamList.getSelectionModel().selectedItemProperty().addListener(
             (observable, previous, selected) -> showTeam(selected)
@@ -239,7 +230,8 @@ final class TeamTabView {
         final VBox content = new VBox(
             10,
             new Label(
-                "Dettaglio dei quattro punteggi fantasy definitivi del team."
+                "Dettaglio delle prestazioni sportive e dei quattro punteggi "
+                    + "fantasy definitivi del team."
             ),
             filters,
             scoreAvailability,
@@ -474,6 +466,65 @@ final class TeamTabView {
         final BorderPane pane = new BorderPane(content);
         pane.setPadding(new Insets(12));
         return pane;
+    }
+
+    private static final class WeekendScoreCell
+        extends ListCell<WeekendScoreRow> {
+
+        private final Label driverAndPoints = new Label();
+        private final Label performance = new Label();
+        private final VBox content = new VBox(4, driverAndPoints, performance);
+
+        WeekendScoreCell() {
+            driverAndPoints.setStyle("-fx-font-weight: bold;");
+            performance.setStyle("-fx-text-fill: #4f5963;");
+            performance.setWrapText(true);
+            content.setPadding(new Insets(4, 2, 4, 2));
+        }
+
+        @Override
+        protected void updateItem(
+            final WeekendScoreRow row,
+            final boolean empty
+        ) {
+            super.updateItem(row, empty);
+            if (empty || row == null) {
+                driverAndPoints.setText(null);
+                performance.setText(null);
+                setGraphic(null);
+            } else {
+                driverAndPoints.setText(
+                    "%s — %s %s — %s".formatted(
+                        row.code(),
+                        row.firstName(),
+                        row.lastName(),
+                        pointsText(row.fantasyPoints())
+                    )
+                );
+                performance.setText(
+                    "Qualifica: %s · Gara: %s · Penalità: %s · "
+                        .formatted(
+                            positionText(row.qualifyingPosition()),
+                            positionText(row.racePosition()),
+                            row.penalized() ? "sì" : "no"
+                        )
+                        + "Giro veloce: %s"
+                            .formatted(row.fastestLap() ? "sì" : "no")
+                );
+                setGraphic(content);
+            }
+            setText(null);
+        }
+
+        private static String positionText(final Integer position) {
+            return position == null ? "N/D" : position + "°";
+        }
+
+        private static String pointsText(final Integer points) {
+            return points == null
+                ? "punteggio non calcolato"
+                : points + " punti";
+        }
     }
 
     private final class DriverSelectionCell

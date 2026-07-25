@@ -8,6 +8,7 @@ import it.unibo.fantasyf1.model.Edizione;
 import it.unibo.fantasyf1.model.EnrolledConstructorOption;
 import it.unibo.fantasyf1.model.GrandPrixOption;
 import it.unibo.fantasyf1.model.RaceWeekend;
+import it.unibo.fantasyf1.model.WeekendPerformanceStatus;
 import it.unibo.fantasyf1.model.dao.AdminDao;
 import it.unibo.fantasyf1.model.dao.EdizioneDao;
 import it.unibo.fantasyf1.model.dao.TeamDao;
@@ -360,6 +361,32 @@ public final class AdminService {
         return transactions.query(
             connection -> admin.editionStatus(connection, editionId)
         );
+    }
+
+    public List<WeekendPerformanceStatus> weekendPerformanceStatus(
+        final int editionId,
+        final int grandPrixId
+    ) {
+        return transactions.query(connection -> {
+            if (
+                editionId <= 0
+                    || grandPrixId <= 0
+                    || admin.findWeekendConclusion(
+                        connection,
+                        editionId,
+                        grandPrixId
+                    ).isEmpty()
+            ) {
+                throw ServiceGuards.notFound(
+                    "Weekend dell'edizione non trovato."
+                );
+            }
+            return admin.findWeekendPerformanceStatus(
+                connection,
+                editionId,
+                grandPrixId
+            );
+        });
     }
 
     private void requireLockedEdition(

@@ -6,6 +6,7 @@ import it.unibo.fantasyf1.model.EditionStatus;
 import it.unibo.fantasyf1.model.EnrolledConstructorOption;
 import it.unibo.fantasyf1.model.GrandPrixOption;
 import it.unibo.fantasyf1.model.RaceWeekend;
+import it.unibo.fantasyf1.model.WeekendPerformanceStatus;
 import it.unibo.fantasyf1.scoring.PerformanceData;
 
 import java.sql.Connection;
@@ -170,6 +171,38 @@ public final class AdminDao {
         JOIN GRAN_PREMIO G ON G.IdGranPremio = W.IdGranPremio
         WHERE W.IdEdizione = ?
         ORDER BY W.NumeroRound
+        """;
+
+    private static final String FIND_WEEKEND_PERFORMANCE_STATUS = """
+        SELECT
+            W.IdEdizione,
+            W.IdGranPremio,
+            PI.IdPilota,
+            P.Nome,
+            P.Cognome,
+            PI.SiglaGara,
+            SI.NomeIscrizione,
+            PW.IdPilota AS IdPrestazione,
+            PW.PosizionamentoQualifica,
+            PW.PosizionamentoGara,
+            PW.Penalizzato,
+            PW.RegistraGiroVeloce,
+            PW.PunteggioFantasy
+        FROM WEEKEND_DI_GARA W
+        JOIN PILOTA_ISCRITTO PI
+          ON PI.IdEdizione = W.IdEdizione
+        JOIN PILOTA P
+          ON P.IdPilota = PI.IdPilota
+        JOIN SCUDERIA_ISCRITTA SI
+          ON SI.IdEdizione = PI.IdEdizione
+         AND SI.IdScuderia = PI.IdScuderia
+        LEFT JOIN PRESTAZIONE_WEEKEND PW
+          ON PW.IdEdizione = W.IdEdizione
+         AND PW.IdGranPremio = W.IdGranPremio
+         AND PW.IdPilota = PI.IdPilota
+        WHERE W.IdEdizione = ?
+          AND W.IdGranPremio = ?
+        ORDER BY P.Cognome, P.Nome
         """;
 
     public boolean lockEdition(
@@ -650,6 +683,43 @@ public final class AdminDao {
         return List.copyOf(weekends);
     }
 
+    public List<WeekendPerformanceStatus> findWeekendPerformanceStatus(
+        final Connection connection,
+        final int editionId,
+        final int grandPrixId
+    ) throws SQLException {
+        final List<WeekendPerformanceStatus> statuses = new ArrayList<>();
+        try (PreparedStatement statement = connection.prepareStatement(
+            FIND_WEEKEND_PERFORMANCE_STATUS
+        )) {
+            statement.setInt(1, editionId);
+            statement.setInt(2, grandPrixId);
+            try (ResultSet result = statement.executeQuery()) {
+                while (result.next()) {
+                    final int performanceDriverId =
+                        result.getInt("IdPrestazione");
+                    final boolean recorded = !result.wasNull();
+                    statuses.add(new WeekendPerformanceStatus(
+                        result.getInt("IdEdizione"),
+                        result.getInt("IdGranPremio"),
+                        result.getInt("IdPilota"),
+                        result.getString("Nome"),
+                        result.getString("Cognome"),
+                        result.getString("SiglaGara"),
+                        result.getString("NomeIscrizione"),
+                        recorded,
+                        nullableInt(result, "PosizionamentoQualifica"),
+                        nullableInt(result, "PosizionamentoGara"),
+                        recorded && result.getBoolean("Penalizzato"),
+                        recorded && result.getBoolean("RegistraGiroVeloce"),
+                        nullableInt(result, "PunteggioFantasy")
+                    ));
+                }
+            }
+        }
+        return List.copyOf(statuses);
+    }
+
     public EditionStatus editionStatus(
         final Connection connection,
         final int editionId
@@ -725,6 +795,14 @@ public final class AdminDao {
         } else {
             statement.setInt(parameter, value);
         }
+    }
+
+    private static Integer nullableInt(
+        final ResultSet result,
+        final String column
+    ) throws SQLException {
+        final int value = result.getInt(column);
+        return result.wasNull() ? null : value;
     }
 
     private static void requireSingleUpdate(

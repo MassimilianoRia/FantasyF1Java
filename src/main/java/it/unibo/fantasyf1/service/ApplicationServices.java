@@ -53,7 +53,12 @@ public final class ApplicationServices {
             Objects.requireNonNull(passwordHasher),
             Objects.requireNonNull(sessions)
         );
-        editions = new EditionService(transactions, editionDao);
+        editions = new EditionService(
+            transactions,
+            editionDao,
+            adminDao,
+            teamDao
+        );
         teams = new TeamService(
             transactions,
             teamDao,
