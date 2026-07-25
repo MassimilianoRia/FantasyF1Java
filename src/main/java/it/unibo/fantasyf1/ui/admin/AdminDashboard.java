@@ -16,17 +16,13 @@ import it.unibo.fantasyf1.service.PerformanceRequest;
 import it.unibo.fantasyf1.ui.UiTheme;
 
 import javafx.beans.property.BooleanProperty;
-import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleBooleanProperty;
-import javafx.beans.property.SimpleObjectProperty;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Parent;
-import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
-import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
@@ -56,6 +52,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -90,17 +87,11 @@ public final class AdminDashboard {
 
     private final TextField editionNumberField = new TextField();
     private final TextField editionYearField = new TextField();
+    private final Button removeEditionButton =
+        new Button("Elimina edizione");
 
-    private final ComboBox<GrandPrixOption> grandPrixEditCombo =
-        new ComboBox<>();
-    private final ObjectProperty<GrandPrixMode> grandPrixMode =
-        new SimpleObjectProperty<>();
-    private final Button insertGrandPrixMode =
-        new Button("Inserisci");
-    private final Button updateGrandPrixMode =
-        new Button("Aggiorna");
     private final Button saveGrandPrixButton =
-        new Button("Continua");
+        new Button("Inserisci Gran Premio");
     private final TextField grandPrixNameField = new TextField();
     private final TextField circuitField = new TextField();
     private final TextField countryField = new TextField();
@@ -149,13 +140,6 @@ public final class AdminDashboard {
         new Button("Riapri weekend");
     private final Button recordPerformanceButton =
         new Button("Registra / correggi prestazione");
-    private final Label weekendResultStatusLabel = new Label(
-        "Nessuna prestazione registrata in questa sessione."
-    );
-
-    private final Label editionOverviewSummary = new Label(
-        "Seleziona un'edizione per confrontare dati presenti e mancanti."
-    );
     private final ListView<RaceWeekend> editionWeekendList =
         new ListView<>();
     private final ListView<GrandPrixOption> availableGrandPrixList =
@@ -202,10 +186,6 @@ public final class AdminDashboard {
 
     private void configureControls() {
         configureCombo(editionCombo, "Seleziona un'edizione");
-        configureCombo(
-            grandPrixEditCombo,
-            "Seleziona un Gran Premio da aggiornare (facoltativo)"
-        );
         configureCombo(weekendGrandPrixCombo, "Seleziona un Gran Premio");
         configureCombo(
             constructorEnrollmentCombo,
@@ -284,23 +264,11 @@ public final class AdminDashboard {
                 }
             }
         );
-        grandPrixEditCombo.valueProperty().addListener(
-            (observable, previous, selected) -> {
-                if (grandPrixMode.get() == GrandPrixMode.UPDATE) {
-                    populateGrandPrixForm(selected);
-                }
-            }
-        );
-        grandPrixMode.addListener(
-            (observable, previous, selected) ->
-                updateGrandPrixModeControls(selected)
-        );
         performanceWeekendCombo.valueProperty().addListener(
             (observable, previous, selected) -> {
                 selectedWeekendConcluded.set(
                     selected != null && selected.concluded()
                 );
-                updatePerformanceWeekendState(selected);
             }
         );
         overviewPerformanceWeekendCombo.valueProperty().addListener(
@@ -310,30 +278,41 @@ public final class AdminDashboard {
                 }
             }
         );
-        overviewPerformanceList.setCellFactory(ignored ->
-            new ListCell<>() {
-                @Override
-                protected void updateItem(
-                    final WeekendPerformanceStatus item,
-                    final boolean empty
-                ) {
-                    super.updateItem(item, empty);
-                    setText(empty || item == null ? null : item.toString());
-                    getStyleClass().removeAll(
-                        "success-text",
-                        "error-text"
-                    );
-                    if (!empty && item != null) {
-                        getStyleClass().add(
-                            item.recorded()
-                                ? "success-text"
-                                : "error-text"
-                        );
-                    }
-                }
-            }
+        configureRemovalList(
+            editionWeekendList,
+            this::removeWeekend,
+            ignored -> true
         );
-        editionOverviewSummary.setWrapText(true);
+        configureRemovalList(
+            availableGrandPrixList,
+            this::removeGrandPrix,
+            ignored -> true
+        );
+        configureRemovalList(
+            editionConstructorList,
+            this::removeConstructorEnrollment,
+            ignored -> true
+        );
+        configureRemovalList(
+            availableConstructorList,
+            this::removeConstructor,
+            ignored -> true
+        );
+        configureRemovalList(
+            editionDriverList,
+            this::removeDriverEnrollment,
+            ignored -> true
+        );
+        configureRemovalList(
+            availableDriverList,
+            this::removeDriver,
+            ignored -> true
+        );
+        configureRemovalList(
+            overviewPerformanceList,
+            this::removePerformance,
+            WeekendPerformanceStatus::recorded
+        );
         overviewPerformanceSummary.setWrapText(true);
         editionWeekendList.setPlaceholder(
             new Label("Nessun GP inserito nell'edizione.")
@@ -370,6 +349,8 @@ public final class AdminDashboard {
         refreshButton.setOnAction(
             event -> refreshAll(selectedEditionId(), "Cataloghi aggiornati.")
         );
+        removeEditionButton.getStyleClass().add("danger-button");
+        removeEditionButton.setOnAction(event -> removeEdition());
 
         progressIndicator.setMaxSize(22, 22);
         progressIndicator.visibleProperty().bind(busy);
@@ -377,6 +358,9 @@ public final class AdminDashboard {
         tabs.disableProperty().bind(busy);
         editionCombo.disableProperty().bind(busy);
         refreshButton.disableProperty().bind(busy);
+        removeEditionButton.disableProperty().bind(
+            busy.or(editionCombo.valueProperty().isNull())
+        );
         concludeWeekendButton.disableProperty().bind(
             busy
                 .or(editionCombo.valueProperty().isNull())
@@ -476,22 +460,22 @@ public final class AdminDashboard {
                 createEditionOverview(),
                 false
             ),
-            createTab("A1 · Edizione", createEditionForm(), false),
-            createTab("A2 · Gran Premio", createGrandPrixForm(), false),
-            createTab("A3 · Weekend", createWeekendForm(), true),
-            createTab("A4 · Scuderia", createConstructorForm(), false),
+            createTab("Edizione", createEditionForm(), false),
+            createTab("Gran Premio", createGrandPrixForm(), false),
+            createTab("Weekend", createWeekendForm(), true),
+            createTab("Scuderia", createConstructorForm(), false),
             createTab(
-                "A5 · Iscrivi scuderia",
+                "Iscrivi scuderia",
                 createConstructorEnrollmentForm(),
                 true
             ),
-            createTab("A6 · Pilota", createDriverForm(), false),
+            createTab("Pilota", createDriverForm(), false),
             createTab(
-                "A7 · Iscrivi pilota",
+                "Iscrivi pilota",
                 createDriverEnrollmentForm(),
                 true
             ),
-            createTab("A8/A9 · Risultati", createPerformanceForm(), true)
+            createTab("Risultati", createPerformanceForm(), true)
         );
         setEditionScopedTabsEnabled(false);
         return tabs;
@@ -514,12 +498,15 @@ public final class AdminDashboard {
             "Contenuto e completezza dell'edizione"
         );
         title.getStyleClass().add("section-title");
-        final Label description = new Label(
-            "Confronta ciò che è già presente con gli elementi anagrafici "
-                + "ancora aggiungibili e controlla le prestazioni di ogni GP."
+        final Region titleSpacer = new Region();
+        HBox.setHgrow(titleSpacer, Priority.ALWAYS);
+        final HBox titleRow = new HBox(
+            10,
+            title,
+            titleSpacer,
+            removeEditionButton
         );
-        description.setWrapText(true);
-
+        titleRow.setAlignment(Pos.CENTER_LEFT);
         final TabPane overviewTabs = new TabPane(
             overviewTab(
                 "Calendario",
@@ -560,9 +547,7 @@ public final class AdminDashboard {
 
         final VBox content = new VBox(
             12,
-            title,
-            description,
-            editionOverviewSummary,
+            titleRow,
             new Separator(),
             overviewTabs
         );
@@ -640,7 +625,6 @@ public final class AdminDashboard {
         save.setOnAction(event -> createEdition());
         return formPage(
             "A1 — Nuova edizione",
-            "Registra un'edizione annuale. Numero e anno devono essere unici.",
             form,
             new HBox(10, save)
         );
@@ -648,58 +632,26 @@ public final class AdminDashboard {
 
     private Node createGrandPrixForm() {
         final GridPane form = createGrid();
-        final HBox modeChoice = new HBox(
-            10,
-            insertGrandPrixMode,
-            updateGrandPrixMode
-        );
-        addRow(form, 0, "Operazione", modeChoice);
-        addRow(form, 1, "Gran Premio esistente", grandPrixEditCombo);
-        addRow(form, 2, "Nome", grandPrixNameField);
-        addRow(form, 3, "Circuito", circuitField);
-        addRow(form, 4, "Nazione", countryField);
-        addRow(form, 5, "Città", cityField);
+        addRow(form, 0, "Nome", grandPrixNameField);
+        addRow(form, 1, "Circuito", circuitField);
+        addRow(form, 2, "Nazione", countryField);
+        addRow(form, 3, "Città", cityField);
 
-        insertGrandPrixMode.disableProperty().bind(busy);
-        updateGrandPrixMode.disableProperty().bind(busy);
-        insertGrandPrixMode.setOnAction(
-            event -> selectGrandPrixMode(GrandPrixMode.INSERT)
-        );
-        updateGrandPrixMode.setOnAction(
-            event -> selectGrandPrixMode(GrandPrixMode.UPDATE)
-        );
         saveGrandPrixButton.setOnAction(event -> saveGrandPrix());
         saveGrandPrixButton.getStyleClass().add("primary-button");
-        final Button cancel = new Button("Annulla operazione");
-        cancel.disableProperty().bind(busy);
-        cancel.setOnAction(event -> selectGrandPrixMode(null));
-
-        grandPrixEditCombo.disableProperty().bind(
-            busy.or(grandPrixMode.isNotEqualTo(GrandPrixMode.UPDATE))
-        );
         for (TextField field : List.of(
             grandPrixNameField,
             circuitField,
             countryField,
             cityField
         )) {
-            field.disableProperty().bind(busy.or(grandPrixMode.isNull()));
+            field.disableProperty().bind(busy);
         }
-        saveGrandPrixButton.disableProperty().bind(
-            busy
-                .or(grandPrixMode.isNull())
-                .or(
-                    grandPrixMode.isEqualTo(GrandPrixMode.UPDATE)
-                        .and(grandPrixEditCombo.valueProperty().isNull())
-                )
-        );
-        updateGrandPrixModeControls(null);
+        saveGrandPrixButton.disableProperty().bind(busy);
         return formPage(
-            "A2 — Inserimento o aggiornamento Gran Premio",
-            "Scegli prima l'operazione. In modalità aggiornamento seleziona "
-                + "il Gran Premio da modificare.",
+            "A2 — Inserimento Gran Premio",
             form,
-            new HBox(10, saveGrandPrixButton, cancel)
+            new HBox(10, saveGrandPrixButton)
         );
     }
 
@@ -716,8 +668,6 @@ public final class AdminDashboard {
         save.setOnAction(event -> addWeekend());
         return formPage(
             "A3 — Weekend nell'edizione selezionata",
-            "Il Gran Premio e il round devono essere liberi nell'edizione; "
-                + "la data di fine non può precedere quella di inizio.",
             form,
             new HBox(10, save)
         );
@@ -733,7 +683,6 @@ public final class AdminDashboard {
         save.setOnAction(event -> createConstructor());
         return formPage(
             "A4 — Scuderia anagrafica",
-            "Registra una scuderia riutilizzabile in più edizioni.",
             form,
             new HBox(10, save)
         );
@@ -756,8 +705,6 @@ public final class AdminDashboard {
         save.setOnAction(event -> enrollConstructor());
         return formPage(
             "A5 — Iscrizione scuderia",
-            "Iscrive la scuderia all'edizione operativa, fino a un massimo "
-                + "di dieci.",
             form,
             new HBox(10, save)
         );
@@ -776,7 +723,6 @@ public final class AdminDashboard {
         save.setOnAction(event -> createDriver());
         return formPage(
             "A6 — Pilota anagrafico",
-            "Registra l'anagrafica generale di un pilota.",
             form,
             new HBox(10, save)
         );
@@ -795,8 +741,6 @@ public final class AdminDashboard {
         save.setOnAction(event -> enrollDriver());
         return formPage(
             "A7 — Iscrizione pilota e assegnazione scuderia",
-            "La sigla contiene tre lettere. La scuderia deve appartenere "
-                + "all'edizione e può avere al massimo due piloti.",
             form,
             new HBox(10, save)
         );
@@ -818,24 +762,14 @@ public final class AdminDashboard {
         concludeWeekendButton.getStyleClass().add("primary-button");
         reopenWeekendButton.getStyleClass().add("danger-button");
 
-        weekendResultStatusLabel.setWrapText(true);
-        weekendResultStatusLabel.getStyleClass().add("status-note");
-        final VBox actions = new VBox(
+        final HBox actions = new HBox(
             10,
-            new HBox(
-                10,
-                recordPerformanceButton,
-                concludeWeekendButton,
-                reopenWeekendButton
-            ),
-            weekendResultStatusLabel
+            recordPerformanceButton,
+            concludeWeekendButton,
+            reopenWeekendButton
         );
         return formPage(
             "A8/A9/A10 — Risultati ufficiali e stato del weekend",
-            "A8 registra o corregge prestazioni finché il weekend è aperto. "
-                + "A9 convalida un set completo, conclude il weekend ed "
-                + "esegue atomicamente O1-O3. A10 consente la riapertura "
-                + "eccezionale per rettifiche sportive.",
             form,
             actions
         );
@@ -843,6 +777,7 @@ public final class AdminDashboard {
 
     private Node createStatusBar() {
         operationStatus.setWrapText(true);
+        operationStatus.getStyleClass().add("log-text");
         final Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         final HBox statusBar = new HBox(
@@ -871,10 +806,9 @@ public final class AdminDashboard {
                 editionId -> {
                     editionNumberField.clear();
                     editionYearField.clear();
-                    confirm("Edizione creata correttamente.");
                     refreshAll(
                         editionId,
-                        "Nuova edizione selezionata e cataloghi aggiornati."
+                        "Edizione creata correttamente."
                     );
                 }
             );
@@ -884,55 +818,24 @@ public final class AdminDashboard {
     }
 
     private void saveGrandPrix() {
-        final GrandPrixMode selectedMode = grandPrixMode.get();
-        if (selectedMode == null) {
-            showInputError(new IllegalArgumentException(
-                "Scegli se inserire o aggiornare un Gran Premio."
-            ));
-            return;
-        }
         final String name = grandPrixNameField.getText();
         final String circuit = circuitField.getText();
         final String country = countryField.getText();
         final String city = cityField.getText();
-        final GrandPrixOption selected = grandPrixEditCombo.getValue();
-        if (selectedMode == GrandPrixMode.UPDATE && selected == null) {
-            showInputError(new IllegalArgumentException(
-                "Seleziona il Gran Premio da aggiornare."
-            ));
-            return;
-        }
         executeMutation(
-            "salvataggio-gran-premio",
-            "Salvataggio del Gran Premio in corso…",
-            () -> {
-                if (selectedMode == GrandPrixMode.INSERT) {
-                    return admin.createGrandPrix(
-                        name,
-                        circuit,
-                        country,
-                        city
-                    );
-                }
-                admin.updateGrandPrix(
-                    selected.id(),
-                    name,
-                    circuit,
-                    country,
-                    city
-                );
-                return selected.id();
-            },
+            "inserimento-gran-premio",
+            "Inserimento del Gran Premio in corso…",
+            () -> admin.createGrandPrix(
+                name,
+                circuit,
+                country,
+                city
+            ),
             ignored -> {
-                selectGrandPrixMode(null);
-                confirm(
-                    selectedMode == GrandPrixMode.INSERT
-                        ? "Gran Premio inserito correttamente."
-                        : "Gran Premio aggiornato correttamente."
-                );
+                clearGrandPrixForm();
                 refreshAll(
                     selectedEditionId(),
-                    "Catalogo dei Gran Premi aggiornato."
+                    "Gran Premio inserito correttamente."
                 );
             }
         );
@@ -977,10 +880,9 @@ public final class AdminDashboard {
                     weekendRoundField.clear();
                     weekendStartDate.setValue(null);
                     weekendEndDate.setValue(null);
-                    confirm("Weekend inserito correttamente.");
                     refreshAll(
                         edition.id(),
-                        "Calendario e completezza aggiornati."
+                        "Weekend inserito correttamente."
                     );
                 }
             );
@@ -997,10 +899,9 @@ public final class AdminDashboard {
             () -> admin.createConstructor(name),
             ignored -> {
                 constructorNameField.clear();
-                confirm("Scuderia registrata correttamente.");
                 refreshAll(
                     selectedEditionId(),
-                    "Catalogo delle scuderie aggiornato."
+                    "Scuderia registrata correttamente."
                 );
             }
         );
@@ -1034,10 +935,9 @@ public final class AdminDashboard {
                 ignored -> {
                     registeredConstructorNameField.clear();
                     carNameField.clear();
-                    confirm("Scuderia iscritta correttamente.");
                     refreshAll(
                         edition.id(),
-                        "Scuderie iscritte e completezza aggiornate."
+                        "Scuderia iscritta correttamente."
                     );
                 }
             );
@@ -1069,10 +969,9 @@ public final class AdminDashboard {
                     driverLastNameField.clear();
                     driverNationalityField.clear();
                     driverBirthDate.setValue(null);
-                    confirm("Pilota registrato correttamente.");
                     refreshAll(
                         selectedEditionId(),
-                        "Catalogo dei piloti aggiornato."
+                        "Pilota registrato correttamente."
                     );
                 }
             );
@@ -1116,10 +1015,9 @@ public final class AdminDashboard {
                 ignored -> {
                     driverCodeField.clear();
                     driverRaceNumberField.clear();
-                    confirm("Pilota iscritto correttamente.");
                     refreshAll(
                         edition.id(),
-                        "Piloti iscritti, risultati e completezza aggiornati."
+                        "Pilota iscritto correttamente."
                     );
                 }
             );
@@ -1167,15 +1065,9 @@ public final class AdminDashboard {
                     return Boolean.TRUE;
                 },
                 ignored -> {
-                    weekendResultStatusLabel.setText(
-                        "Prestazione salvata. Il punteggio fantasy resta "
-                            + "non calcolato fino alla conclusione A9."
-                    );
-                    confirm("Prestazione salvata correttamente.");
                     refreshAll(
                         edition.id(),
-                        "Prestazione salvata; il weekend è ancora "
-                            + "non concluso."
+                        "Prestazione salvata correttamente."
                     );
                 }
             );
@@ -1205,18 +1097,10 @@ public final class AdminDashboard {
                     return Boolean.TRUE;
                 },
                 ignored -> {
-                    weekendResultStatusLabel.setText(
-                        "Weekend concluso e convalidato: O1, O2 e O3 "
-                            + "completate."
-                    );
-                    confirm(
-                        "Weekend concluso. I punteggi fantasy sono ora "
-                            + "disponibili."
-                    );
                     refreshAll(
                         edition.id(),
-                        "Conclusione amministrativa e calcolo O1-O3 "
-                            + "completati."
+                        "Weekend concluso. I punteggi fantasy sono ora "
+                            + "disponibili."
                     );
                 }
             );
@@ -1235,9 +1119,6 @@ public final class AdminDashboard {
                 performanceWeekendCombo,
                 "Seleziona un weekend."
             );
-            if (!confirmReopening(weekend)) {
-                return;
-            }
             executeMutation(
                 "riapertura-weekend",
                 "Riapertura e invalidazione dei dati fantasy in corso…",
@@ -1249,23 +1130,192 @@ public final class AdminDashboard {
                     return Boolean.TRUE;
                 },
                 ignored -> {
-                    weekendResultStatusLabel.setText(
-                        "Weekend riaperto: prestazioni modificabili; "
-                            + "punteggi fantasy e risultati team invalidati."
-                    );
-                    confirm(
-                        "Weekend riaperto. Correggi le prestazioni e "
-                            + "concludilo nuovamente per ricalcolare i punti."
-                    );
                     refreshAll(
                         edition.id(),
-                        "Riapertura A10 completata e classifiche aggiornate."
+                        "Weekend riaperto correttamente."
                     );
                 }
             );
         } catch (RuntimeException exception) {
             showInputError(exception);
         }
+    }
+
+    private void removeEdition() {
+        final Edizione edition = editionCombo.getValue();
+        if (edition == null) {
+            return;
+        }
+        executeMutation(
+            "rimozione-edizione",
+            "Rimozione dell'edizione in corso…",
+            () -> {
+                admin.removeEdition(edition.id());
+                return Boolean.TRUE;
+            },
+            ignored -> {
+                refreshAll(null, "Edizione eliminata correttamente.");
+            }
+        );
+    }
+
+    private void removeGrandPrix(final GrandPrixOption grandPrix) {
+        final Integer editionId = selectedEditionId();
+        executeMutation(
+            "rimozione-gran-premio",
+            "Rimozione del Gran Premio in corso…",
+            () -> {
+                admin.removeGrandPrix(grandPrix.id());
+                return Boolean.TRUE;
+            },
+            ignored -> {
+                refreshAll(
+                    editionId,
+                    "Gran Premio eliminato correttamente."
+                );
+            }
+        );
+    }
+
+    private void removeWeekend(final RaceWeekend weekend) {
+        if (weekend.concluded()) {
+            showInputError(new IllegalArgumentException(
+                "Riapri il weekend concluso prima di rimuoverlo."
+            ));
+            return;
+        }
+        executeMutation(
+            "rimozione-weekend",
+            "Rimozione del weekend in corso…",
+            () -> {
+                admin.removeWeekend(
+                    weekend.editionId(),
+                    weekend.grandPrixId()
+                );
+                return Boolean.TRUE;
+            },
+            ignored -> {
+                refreshAll(
+                    weekend.editionId(),
+                    "Weekend rimosso correttamente."
+                );
+            }
+        );
+    }
+
+    private void removeConstructor(
+        final ConstructorOption constructor
+    ) {
+        final Integer editionId = selectedEditionId();
+        executeMutation(
+            "rimozione-scuderia",
+            "Rimozione della scuderia in corso…",
+            () -> {
+                admin.removeConstructor(constructor.id());
+                return Boolean.TRUE;
+            },
+            ignored -> {
+                refreshAll(
+                    editionId,
+                    "Scuderia anagrafica eliminata correttamente."
+                );
+            }
+        );
+    }
+
+    private void removeConstructorEnrollment(
+        final EnrolledConstructorOption constructor
+    ) {
+        executeMutation(
+            "rimozione-iscrizione-scuderia",
+            "Rimozione dell'iscrizione della scuderia in corso…",
+            () -> {
+                admin.removeConstructorEnrollment(
+                    constructor.editionId(),
+                    constructor.constructorId()
+                );
+                return Boolean.TRUE;
+            },
+            ignored -> {
+                refreshAll(
+                    constructor.editionId(),
+                    "Iscrizione della scuderia rimossa correttamente."
+                );
+            }
+        );
+    }
+
+    private void removeDriver(final DriverRegistryOption driver) {
+        final Integer editionId = selectedEditionId();
+        executeMutation(
+            "rimozione-pilota",
+            "Rimozione del pilota in corso…",
+            () -> {
+                admin.removeDriver(driver.id());
+                return Boolean.TRUE;
+            },
+            ignored -> {
+                refreshAll(
+                    editionId,
+                    "Pilota anagrafico eliminato correttamente."
+                );
+            }
+        );
+    }
+
+    private void removeDriverEnrollment(final DriverOption driver) {
+        executeMutation(
+            "rimozione-iscrizione-pilota",
+            "Rimozione dell'iscrizione del pilota in corso…",
+            () -> {
+                admin.removeDriverEnrollment(
+                    driver.editionId(),
+                    driver.id()
+                );
+                return Boolean.TRUE;
+            },
+            ignored -> {
+                refreshAll(
+                    driver.editionId(),
+                    "Iscrizione del pilota rimossa correttamente."
+                );
+            }
+        );
+    }
+
+    private void removePerformance(
+        final WeekendPerformanceStatus performance
+    ) {
+        if (!performance.recorded()) {
+            return;
+        }
+        final RaceWeekend weekend =
+            overviewPerformanceWeekendCombo.getValue();
+        if (weekend != null && weekend.concluded()) {
+            showInputError(new IllegalArgumentException(
+                "Riapri il weekend concluso prima di rimuovere "
+                    + "una prestazione."
+            ));
+            return;
+        }
+        executeMutation(
+            "rimozione-prestazione",
+            "Rimozione della prestazione in corso…",
+            () -> {
+                admin.removePerformance(
+                    performance.editionId(),
+                    performance.grandPrixId(),
+                    performance.driverId()
+                );
+                return Boolean.TRUE;
+            },
+            ignored -> {
+                refreshAll(
+                    performance.editionId(),
+                    "Prestazione sportiva rimossa correttamente."
+                );
+            }
+        );
     }
 
     private void refreshAll(
@@ -1286,10 +1336,7 @@ public final class AdminDashboard {
                 final Edizione selected = editionCombo.getValue();
                 if (selected == null) {
                     clearEditionScopedCatalogs();
-                    setOperationStatus(
-                        "Nessuna edizione disponibile. Usa A1 per crearne una.",
-                        false
-                    );
+                    setOperationStatus(successMessage, false);
                 } else {
                     refreshEditionScope(selected, successMessage);
                 }
@@ -1318,8 +1365,7 @@ public final class AdminDashboard {
                     return;
                 }
                 applyEditionCatalogs(catalogs);
-                setOperationStatus(successMessage, false);
-                refreshOverviewPerformanceStatus();
+                refreshOverviewPerformanceStatus(successMessage);
             }
         );
     }
@@ -1347,11 +1393,6 @@ public final class AdminDashboard {
         }
         setEditionScopedTabsEnabled(selected != null);
 
-        replaceItems(
-            grandPrixEditCombo,
-            grandPrixCatalog,
-            GrandPrixOption::id
-        );
         replaceItems(
             weekendGrandPrixCombo,
             grandPrixCatalog,
@@ -1482,6 +1523,12 @@ public final class AdminDashboard {
     }
 
     private void refreshOverviewPerformanceStatus() {
+        refreshOverviewPerformanceStatus(null);
+    }
+
+    private void refreshOverviewPerformanceStatus(
+        final String completionMessage
+    ) {
         final Edizione edition = editionCombo.getValue();
         final RaceWeekend weekend =
             overviewPerformanceWeekendCombo.getValue();
@@ -1490,6 +1537,9 @@ public final class AdminDashboard {
             overviewPerformanceSummary.setText(
                 "Nessun GP disponibile da controllare."
             );
+            if (completionMessage != null) {
+                setOperationStatus(completionMessage, false);
+            }
             return;
         }
         overviewPerformanceList.getItems().clear();
@@ -1538,33 +1588,13 @@ public final class AdminDashboard {
                         )
                 );
                 setOperationStatus(
-                    "Controllo prestazioni aggiornato.",
+                    completionMessage == null
+                        ? "Controllo prestazioni aggiornato."
+                        : completionMessage,
                     false
                 );
             }
         );
-    }
-
-    private void updatePerformanceWeekendState(
-        final RaceWeekend weekend
-    ) {
-        if (weekend == null) {
-            weekendResultStatusLabel.setText(
-                "Seleziona un weekend per registrarne o convalidarne "
-                    + "i risultati."
-            );
-        } else if (weekend.concluded()) {
-            weekendResultStatusLabel.setText(
-                "Weekend concluso: le prestazioni sono bloccate e i "
-                    + "punteggi fantasy sono definitivi. Puoi riaprirlo "
-                    + "eccezionalmente per correggere i risultati ufficiali."
-            );
-        } else {
-            weekendResultStatusLabel.setText(
-                "Weekend non concluso: puoi registrare le prestazioni. "
-                    + "I punteggi saranno calcolati soltanto con A9."
-            );
-        }
     }
 
     private void applyEditionStatus(final EditionStatus status) {
@@ -1583,21 +1613,6 @@ public final class AdminDashboard {
                 )
                 + "%d/10 scuderie con due piloti"
                     .formatted(status.constructorsWithTwoDrivers())
-        );
-        editionOverviewSummary.setText(
-            status.complete()
-                ? "Edizione completa: tutti i 24 GP, le 10 scuderie e i "
-                    + "20 piloti sono presenti."
-                : "Popolamento in corso: mancano %d GP, %d scuderie e "
-                    .formatted(
-                        Math.max(0, 24 - status.weekends()),
-                        Math.max(0, 10 - status.constructors())
-                    )
-                    + "%d piloti. %d/10 scuderie hanno già due piloti."
-                        .formatted(
-                            Math.max(0, 20 - status.drivers()),
-                            status.constructorsWithTwoDrivers()
-                        )
         );
         final double completed = Math.min(status.weekends(), 24)
             + Math.min(status.constructors(), 10)
@@ -1618,11 +1633,17 @@ public final class AdminDashboard {
         performanceDriverCombo.getItems().clear();
         performanceWeekendCombo.getItems().clear();
         editionWeekendList.getItems().clear();
-        availableGrandPrixList.getItems().clear();
+        availableGrandPrixList.setItems(
+            FXCollections.observableArrayList(grandPrixCatalog)
+        );
         editionConstructorList.getItems().clear();
-        availableConstructorList.getItems().clear();
+        availableConstructorList.setItems(
+            FXCollections.observableArrayList(constructorCatalog)
+        );
         editionDriverList.getItems().clear();
-        availableDriverList.getItems().clear();
+        availableDriverList.setItems(
+            FXCollections.observableArrayList(driverCatalog)
+        );
         updatingOverviewPerformanceSelection = true;
         try {
             overviewPerformanceWeekendCombo.getItems().clear();
@@ -1631,9 +1652,6 @@ public final class AdminDashboard {
             updatingOverviewPerformanceSelection = false;
         }
         overviewPerformanceList.getItems().clear();
-        editionOverviewSummary.setText(
-            "Seleziona un'edizione per confrontare dati presenti e mancanti."
-        );
         overviewPerformanceSummary.setText(
             "Seleziona un GP per verificare le prestazioni."
         );
@@ -1679,139 +1697,37 @@ public final class AdminDashboard {
             },
             failure -> {
                 busy.set(false);
-                showOperationError(operationName, failure);
+                showOperationError(failure);
             }
         );
     }
 
-    private void showOperationError(
-        final String operationName,
-        final Throwable failure
-    ) {
+    private void showOperationError(final Throwable failure) {
         final String message = friendlyMessage(failure);
         setOperationStatus(message, true);
-        showAlert(
-            Alert.AlertType.ERROR,
-            "Operazione non riuscita",
-            readableOperation(operationName),
-            message
-        );
     }
 
     private void showInputError(final RuntimeException exception) {
         final String message = friendlyMessage(exception);
         setOperationStatus(message, true);
-        showAlert(
-            Alert.AlertType.WARNING,
-            "Dati non validi",
-            "Controlla i campi del form",
-            message
-        );
-    }
-
-    private void confirm(final String message) {
-        showAlert(
-            Alert.AlertType.INFORMATION,
-            "Operazione completata",
-            null,
-            message
-        );
-    }
-
-    private boolean confirmReopening(final RaceWeekend weekend) {
-        final Alert alert = new Alert(
-            Alert.AlertType.CONFIRMATION,
-            "I punteggi fantasy e i risultati dei team di "
-                + weekend.grandPrixName()
-                + " verranno invalidati. Le prestazioni sportive resteranno "
-                + "disponibili per la correzione.",
-            ButtonType.OK,
-            ButtonType.CANCEL
-        );
-        UiTheme.apply(alert.getDialogPane());
-        alert.setTitle("Conferma riapertura");
-        alert.setHeaderText("Riaprire il weekend concluso?");
-        if (root.getScene() != null && root.getScene().getWindow() != null) {
-            alert.initOwner(root.getScene().getWindow());
-        }
-        return alert.showAndWait().filter(ButtonType.OK::equals).isPresent();
-    }
-
-    private void showAlert(
-        final Alert.AlertType type,
-        final String title,
-        final String header,
-        final String message
-    ) {
-        final Alert alert = new Alert(type);
-        UiTheme.apply(alert.getDialogPane());
-        alert.setTitle(title);
-        alert.setHeaderText(header);
-        alert.setContentText(message);
-        if (root.getScene() != null && root.getScene().getWindow() != null) {
-            alert.initOwner(root.getScene().getWindow());
-        }
-        alert.show();
     }
 
     private void setOperationStatus(
         final String message,
         final boolean error
     ) {
-        operationStatus.setText(message);
+        operationStatus.setText(capitalizeSentence(message));
         operationStatus.getStyleClass().remove("error-text");
         if (error) {
             operationStatus.getStyleClass().add("error-text");
         }
     }
 
-    private void populateGrandPrixForm(final GrandPrixOption grandPrix) {
-        if (grandPrix == null) {
-            grandPrixNameField.clear();
-            circuitField.clear();
-            countryField.clear();
-            cityField.clear();
-            return;
-        }
-        grandPrixNameField.setText(grandPrix.name());
-        circuitField.setText(grandPrix.circuit());
-        countryField.setText(grandPrix.country());
-        cityField.setText(grandPrix.city());
-    }
-
     private void clearGrandPrixForm() {
-        grandPrixEditCombo.setValue(null);
         grandPrixNameField.clear();
         circuitField.clear();
         countryField.clear();
         cityField.clear();
-    }
-
-    private void selectGrandPrixMode(final GrandPrixMode mode) {
-        grandPrixMode.set(mode);
-        clearGrandPrixForm();
-        if (mode == GrandPrixMode.INSERT) {
-            grandPrixNameField.requestFocus();
-        } else if (mode == GrandPrixMode.UPDATE) {
-            grandPrixEditCombo.requestFocus();
-        }
-    }
-
-    private void updateGrandPrixModeControls(final GrandPrixMode mode) {
-        insertGrandPrixMode.getStyleClass().remove("active-choice");
-        updateGrandPrixMode.getStyleClass().remove("active-choice");
-        if (mode == GrandPrixMode.INSERT) {
-            insertGrandPrixMode.getStyleClass().add("active-choice");
-        } else if (mode == GrandPrixMode.UPDATE) {
-            updateGrandPrixMode.getStyleClass().add("active-choice");
-        }
-        saveGrandPrixButton.setText(
-            mode == GrandPrixMode.INSERT
-                ? "Inserisci Gran Premio"
-                : mode == GrandPrixMode.UPDATE
-                    ? "Aggiorna Gran Premio"
-                    : "Continua"
-        );
     }
 
     private void setEditionScopedTabsEnabled(final boolean enabled) {
@@ -1932,8 +1848,28 @@ public final class AdminDashboard {
         return "Operazione non completata. Verifica la connessione e riprova.";
     }
 
-    private static String readableOperation(final String operationName) {
-        return operationName.replace('-', ' ');
+    private static String capitalizeSentence(final String message) {
+        if (message == null || message.isBlank()) {
+            return "";
+        }
+        final StringBuilder result = new StringBuilder(message.length());
+        boolean sentenceStart = true;
+        for (int index = 0; index < message.length(); index++) {
+            final char character = message.charAt(index);
+            if (sentenceStart && Character.isLetter(character)) {
+                result.append(Character.toUpperCase(character));
+                sentenceStart = false;
+            } else {
+                result.append(character);
+            }
+            if (character == '.' || character == '!' || character == '?') {
+                sentenceStart = true;
+            } else if (!Character.isWhitespace(character)
+                && !Character.isLetter(character)) {
+                sentenceStart = false;
+            }
+        }
+        return result.toString();
     }
 
     private static GridPane createGrid() {
@@ -1964,18 +1900,14 @@ public final class AdminDashboard {
 
     private static Node formPage(
         final String titleText,
-        final String descriptionText,
         final Node form,
         final Node actions
     ) {
         final Label title = new Label(titleText);
         title.getStyleClass().add("section-title");
-        final Label description = new Label(descriptionText);
-        description.setWrapText(true);
         final VBox content = new VBox(
             14,
             title,
-            description,
             new Separator(),
             form,
             actions
@@ -1997,6 +1929,69 @@ public final class AdminDashboard {
         combo.setPromptText(prompt);
         combo.setPrefWidth(FIELD_WIDTH);
         combo.setMaxWidth(Double.MAX_VALUE);
+    }
+
+    private <T> void configureRemovalList(
+        final ListView<T> list,
+        final Consumer<T> removal,
+        final Predicate<T> removable
+    ) {
+        list.setCellFactory(ignored -> new ListCell<>() {
+            private final Label description = new Label();
+            private final Region spacer = new Region();
+            private final Button remove = new Button("Rimuovi");
+            private final HBox content = new HBox(
+                10,
+                description,
+                spacer,
+                remove
+            );
+
+            {
+                description.setWrapText(true);
+                description.setMaxWidth(Double.MAX_VALUE);
+                HBox.setHgrow(description, Priority.ALWAYS);
+                HBox.setHgrow(spacer, Priority.ALWAYS);
+                content.setAlignment(Pos.CENTER_LEFT);
+                remove.getStyleClass().addAll(
+                    "compact-button",
+                    "danger-button"
+                );
+                remove.disableProperty().bind(busy);
+                remove.setOnAction(event -> {
+                    final T current = getItem();
+                    if (current != null && removable.test(current)) {
+                        removal.accept(current);
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(final T item, final boolean empty) {
+                super.updateItem(item, empty);
+                setText(null);
+                description.getStyleClass().removeAll(
+                    "success-text",
+                    "error-text"
+                );
+                if (empty || item == null) {
+                    setGraphic(null);
+                    return;
+                }
+                description.setText(item.toString());
+                final boolean canRemove = removable.test(item);
+                remove.setVisible(canRemove);
+                remove.setManaged(canRemove);
+                if (item instanceof WeekendPerformanceStatus status) {
+                    description.getStyleClass().add(
+                        status.recorded()
+                            ? "success-text"
+                            : "error-text"
+                    );
+                }
+                setGraphic(content);
+            }
+        });
     }
 
     private static <T> void replaceItems(
@@ -2024,11 +2019,6 @@ public final class AdminDashboard {
         if (combo.getValue() == null && !combo.getItems().isEmpty()) {
             combo.getSelectionModel().selectFirst();
         }
-    }
-
-    private enum GrandPrixMode {
-        INSERT,
-        UPDATE
     }
 
     private record GlobalCatalogs(

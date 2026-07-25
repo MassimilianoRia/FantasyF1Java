@@ -30,7 +30,7 @@ soltanto nella schermata iniziale comune e non appartiene alla sessione utente.
 | Codice | Fonte | Comportamento richiesto | Stato iniziale | Garanzia già presente | Controllo applicativo necessario | File/simboli previsti | Test di accettazione |
 |---|---|---|---|---|---|---|---|
 | A1 | §1.5.2 p. 7; query p. 33 | Inserire edizione | ASSENTE | PK/UNIQUE numero e anno | range e campi obbligatori; errore duplicato | `AdminService.createEdition`, `AdminDao`, `AdminDashboard` | creazione; duplicati distinti; modalità amministratore |
-| A2 | §1.5.2 p. 7; §3.3.5 p. 18; query pp. 33–34 | Inserire o aggiornare Gran Premio | ASSENTE | UNIQUE nome | scelta esplicita insert/update; validazione descrittivi; operazioni atomiche | `AdminService.createGrandPrix`, `AdminService.updateGrandPrix`, `AdminDao` | insert e update anche del nome sullo stesso identificatore |
+| A2 | Variazione implementativa 2026-07-25; relazione da allineare | Inserire un Gran Premio senza possibilità di aggiornamento | ASSENTE | UNIQUE nome | validazione descrittivi; inserimento atomico | `AdminService.createGrandPrix`, `AdminDao.insertGrandPrix`, `AdminDashboard` | inserimento e duplicato; assenza del flusso di update |
 | A3 | §1.5.2 p. 7; §3.3.6 pp. 20–21; query p. 37 | Inserire weekend non concluso nell'edizione | ASSENTE | FK; UNIQUE round; CHECK 1–24 e date; `Concluso DEFAULT FALSE` | lock edizione, massimo 24, selezioni coerenti, intervallo | `AdminService.addWeekend`, `AdminDao` | limite 24 sotto transazione; round/data invalidi; default non concluso |
 | A4 | §1.5.2 p. 7; query p. 34 | Inserire scuderia anagrafica | ASSENTE | UNIQUE nome | validazione | `AdminService.createConstructor`, `AdminDao` | inserimento e duplicato |
 | A5 | §1.5.2 p. 7; query p. 34 | Iscrivere scuderia con nome stagionale e vettura | ASSENTE | PK stagionale; FK; UNIQUE nome iscrizione | lock edizione, massimo 10, selezione anagrafica | `AdminService.enrollConstructor`, `AdminDao` | limite 10; duplicati; rollback |
@@ -39,6 +39,7 @@ soltanto nella schermata iniziale comune e non appartiene alla sessione utente.
 | A8 | §1.5.2 p. 7; §3.3.7 p. 21; query p. 38 | Registrare/correggere una prestazione solo a weekend aperto, invalidando il punteggio | ASSENTE | PK/FK; CHECK posizioni | lock e filtro SQL `Concluso = FALSE`; stessa edizione; `PunteggioFantasy = NULL`; nessun risultato parziale | `WeekendProcessingService.recordPerformance`, `AdminDao`, `AdminDashboard` | inserimento aperto; correzione aperta; modifica concluso respinta; nessun O1 anticipato |
 | A9 | §1.5.2 p. 7; query p. 38 | Convalidare prestazioni complete e concludere il weekend | ASSENTE | `Concluso NOT NULL DEFAULT FALSE` | lock edizione/weekend; conteggio piloti/prestazioni; UPDATE condizionale; transazione unica A9→O1→O2→O3 | `WeekendProcessingService.concludeWeekend`, `AdminDao`, `AdminDashboard` | incompleto/non trovato/già concluso; data irrilevante; rollback totale; riconclusione valida |
 | A10 | requisito di rettifica allegato | Riaprire eccezionalmente un weekend concluso invalidando soltanto i dati fantasy derivati | ASSENTE | PK/FK esistenti; nessuna nuova struttura | lock edizione/weekend; UPDATE condizionale a `FALSE`; score a `NULL`; DELETE risultati; O3 in unica transazione | `WeekendProcessingService.reopenWeekend`, `AdminDao.reopenWeekend`, `ResultDao`, `AdminDashboard` | successo; aperto/inesistente; prestazioni intatte e modificabili; zero team; rollback; riconclusione senza duplicati; assente nella UI utente |
+| A11 | Variazione implementativa 2026-07-25 | Rendere reversibile il popolamento amministrativo dell'edizione | ASSENTE | FK esistenti senza cascade distruttive | rimozione esplicita in ordine inverso; lock edizione; blocco su dipendenze e dati utente; weekend concluso da riaprire | `AdminService.remove*`, `WeekendProcessingService.removePerformance`, `AdminDao.delete*`, tab Stato edizione | rimozione completa; dipendenze respinte; anagrafica usata in altra edizione respinta; prestazione conclusa da riaprire |
 
 ## Operazioni automatiche
 
@@ -100,7 +101,7 @@ soltanto nella schermata iniziale comune e non appartiene alla sessione utente.
 | U8 | VERIFICATO | guard service e query `TeamDao` su `Concluso = TRUE`; UI disabilitata sui weekend aperti | `WeekendProcessingH2Test` |
 | U9 | VERIFICATO | `LegaDao.findStandings` usa il totale mantenuto da O3 sui soli conclusi | `TeamLeagueServiceH2Test`, `WeekendProcessingH2Test` |
 | A1 | VERIFICATO | `AdminService.createEdition`, tab A1 | `AdminCrudH2Test` |
-| A2 | VERIFICATO | upsert `AdminDao.upsertGrandPrix`, tab A2 | `AdminCrudH2Test` |
+| A2 | VERIFICATO | solo insert in `AdminService.createGrandPrix`/`AdminDao.insertGrandPrix`, tab Gran Premio | `AdminCrudH2Test` |
 | A3 | VERIFICATO | lock edizione, limite 24, tab A3 | `AdminLimitsH2Test`, `AdminCrudH2Test` |
 | A4 | VERIFICATO | `AdminService.createConstructor`, tab A4 | `AdminCrudH2Test` |
 | A5 | VERIFICATO | lock edizione, limite 10, tab A5 | `AdminLimitsH2Test`, `AdminCrudH2Test` |
@@ -109,6 +110,7 @@ soltanto nella schermata iniziale comune e non appartiene alla sessione utente.
 | A8 | VERIFICATO | upsert solo aperto e invalidazione punteggio in `WeekendProcessingService`/`AdminDao`, tab A8/A9 | `WeekendProcessingH2Test` |
 | A9 | VERIFICATO | lock, completezza, UPDATE condizionale e sequenza atomica O1–O3 | `WeekendProcessingH2Test` |
 | A10 | VERIFICATO | riapertura condizionale e invalidazione atomica dei derivati; conferma nella sola dashboard trusted | `WeekendProcessingH2Test`, `ApplicationAccessTest` |
+| A11 | VERIFICATO | rimozioni transazionali e pulsanti contestuali nella tab Stato edizione | `AdminRemovalH2Test` |
 | O1 | VERIFICATO | `ScoringPolicy` isolata; SELECT e UPDATE solo su weekend concluso | `SimpleScoringPolicyTest`, `WeekendProcessingH2Test` |
 | O2 | VERIFICATO | join `Concluso = TRUE` e quattro score | `WeekendProcessingH2Test` |
 | O3 | VERIFICATO | somma con join ai soli weekend conclusi, zero in assenza | `WeekendProcessingH2Test` |

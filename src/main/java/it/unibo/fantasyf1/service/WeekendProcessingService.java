@@ -107,6 +107,113 @@ public final class WeekendProcessingService {
     }
 
     /**
+     * Rimuove una prestazione da un weekend aperto e mantiene coerenti le
+     * ridondanze fantasy anche in presenza di dati legacy.
+     */
+    public void removePerformance(
+        final int editionId,
+        final int grandPrixId,
+        final int driverId
+    ) {
+        if (editionId <= 0 || grandPrixId <= 0 || driverId <= 0) {
+            throw ServiceGuards.invalid(
+                "Seleziona un'edizione, un weekend e un pilota validi."
+            );
+        }
+        transactions.inTransaction(connection -> {
+            if (!admin.lockEdition(connection, editionId)) {
+                throw ServiceGuards.notFound("Edizione non trovata.");
+            }
+            final boolean concluded = admin.lockWeekendConclusion(
+                connection,
+                editionId,
+                grandPrixId
+            ).orElseThrow(() -> ServiceGuards.notFound(
+                "Weekend non trovato."
+            ));
+            if (concluded) {
+                throw ServiceGuards.conflict(
+                    "Il weekend è concluso. Riaprilo prima di rimuovere "
+                        + "una prestazione."
+                );
+            }
+            if (!admin.isPerformancePresent(
+                connection,
+                editionId,
+                grandPrixId,
+                driverId
+            )) {
+                throw ServiceGuards.notFound("Prestazione non trovata.");
+            }
+
+            admin.deletePerformance(
+                connection,
+                editionId,
+                grandPrixId,
+                driverId
+            );
+            results.clearWeekendResults(
+                connection,
+                editionId,
+                grandPrixId
+            );
+            results.recalculateEditionTotals(connection, editionId);
+        });
+    }
+
+    /**
+     * Rimuove un weekend aperto privo di prestazioni e ripulisce eventuali
+     * risultati fantasy derivati rimasti da dati legacy.
+     */
+    public void removeWeekend(
+        final int editionId,
+        final int grandPrixId
+    ) {
+        if (editionId <= 0 || grandPrixId <= 0) {
+            throw ServiceGuards.invalid(
+                "Seleziona un'edizione e un weekend validi."
+            );
+        }
+        transactions.inTransaction(connection -> {
+            if (!admin.lockEdition(connection, editionId)) {
+                throw ServiceGuards.notFound("Edizione non trovata.");
+            }
+            final boolean concluded = admin.lockWeekendConclusion(
+                connection,
+                editionId,
+                grandPrixId
+            ).orElseThrow(() -> ServiceGuards.notFound(
+                "Weekend non trovato."
+            ));
+            if (concluded) {
+                throw ServiceGuards.conflict(
+                    "Il weekend è concluso. Riaprilo prima di rimuoverlo."
+                );
+            }
+            if (
+                admin.countWeekendPerformances(
+                    connection,
+                    editionId,
+                    grandPrixId
+                ) > 0
+            ) {
+                throw ServiceGuards.conflict(
+                    "Il weekend contiene ancora prestazioni sportive. "
+                        + "Rimuovile prima di eliminare il weekend."
+                );
+            }
+
+            results.clearWeekendResults(
+                connection,
+                editionId,
+                grandPrixId
+            );
+            admin.deleteWeekend(connection, editionId, grandPrixId);
+            results.recalculateEditionTotals(connection, editionId);
+        });
+    }
+
+    /**
      * A9 convalida i risultati e, nella stessa transazione, esegue O1-O3.
      */
     public void concludeWeekend(

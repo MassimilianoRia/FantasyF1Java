@@ -40,30 +40,9 @@ public final class AdminDao {
         VALUES (?, ?)
         """;
 
-    private static final String UPSERT_GRAND_PRIX = """
-        INSERT INTO GRAN_PREMIO (Nome, Circuito, Nazione, `Città`)
-        VALUES (?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE
-            Circuito = VALUES(Circuito),
-            Nazione = VALUES(Nazione),
-            `Città` = VALUES(`Città`)
-        """;
-
     private static final String INSERT_GRAND_PRIX = """
         INSERT INTO GRAN_PREMIO (Nome, Circuito, Nazione, `Città`)
         VALUES (?, ?, ?, ?)
-        """;
-
-    private static final String UPDATE_GRAND_PRIX = """
-        UPDATE GRAN_PREMIO
-        SET Nome = ?, Circuito = ?, Nazione = ?, `Città` = ?
-        WHERE IdGranPremio = ?
-        """;
-
-    private static final String FIND_GRAND_PRIX_BY_NAME = """
-        SELECT IdGranPremio
-        FROM GRAN_PREMIO
-        WHERE Nome = ?
         """;
 
     private static final String INSERT_WEEKEND = """
@@ -114,6 +93,48 @@ public final class AdminDao {
             Penalizzato = VALUES(Penalizzato),
             RegistraGiroVeloce = VALUES(RegistraGiroVeloce),
             PunteggioFantasy = NULL
+        """;
+
+    private static final String DELETE_EDITION = """
+        DELETE FROM EDIZIONE
+        WHERE IdEdizione = ?
+        """;
+
+    private static final String DELETE_GRAND_PRIX = """
+        DELETE FROM GRAN_PREMIO
+        WHERE IdGranPremio = ?
+        """;
+
+    private static final String DELETE_WEEKEND = """
+        DELETE FROM WEEKEND_DI_GARA
+        WHERE IdEdizione = ? AND IdGranPremio = ?
+        """;
+
+    private static final String DELETE_CONSTRUCTOR = """
+        DELETE FROM SCUDERIA
+        WHERE IdScuderia = ?
+        """;
+
+    private static final String DELETE_CONSTRUCTOR_ENROLLMENT = """
+        DELETE FROM SCUDERIA_ISCRITTA
+        WHERE IdEdizione = ? AND IdScuderia = ?
+        """;
+
+    private static final String DELETE_DRIVER = """
+        DELETE FROM PILOTA
+        WHERE IdPilota = ?
+        """;
+
+    private static final String DELETE_DRIVER_ENROLLMENT = """
+        DELETE FROM PILOTA_ISCRITTO
+        WHERE IdEdizione = ? AND IdPilota = ?
+        """;
+
+    private static final String DELETE_PERFORMANCE = """
+        DELETE FROM PRESTAZIONE_WEEKEND
+        WHERE IdEdizione = ?
+          AND IdGranPremio = ?
+          AND IdPilota = ?
         """;
 
     private static final String FIND_WEEKEND_CONCLUSION = """
@@ -237,33 +258,6 @@ public final class AdminDao {
         });
     }
 
-    public int upsertGrandPrix(
-        final Connection connection,
-        final String name,
-        final String circuit,
-        final String country,
-        final String city
-    ) throws SQLException {
-        try (PreparedStatement statement =
-                 connection.prepareStatement(UPSERT_GRAND_PRIX)) {
-            statement.setString(1, name);
-            statement.setString(2, circuit);
-            statement.setString(3, country);
-            statement.setString(4, city);
-            statement.executeUpdate();
-        }
-        try (PreparedStatement statement =
-                 connection.prepareStatement(FIND_GRAND_PRIX_BY_NAME)) {
-            statement.setString(1, name);
-            try (ResultSet result = statement.executeQuery()) {
-                if (!result.next()) {
-                    throw new SQLException("Gran Premio non recuperabile");
-                }
-                return result.getInt(1);
-            }
-        }
-    }
-
     public int insertGrandPrix(
         final Connection connection,
         final String name,
@@ -281,28 +275,6 @@ public final class AdminDao {
                 statement.setString(4, city);
             }
         );
-    }
-
-    public void updateGrandPrix(
-        final Connection connection,
-        final int grandPrixId,
-        final String name,
-        final String circuit,
-        final String country,
-        final String city
-    ) throws SQLException {
-        try (PreparedStatement statement =
-                 connection.prepareStatement(UPDATE_GRAND_PRIX)) {
-            statement.setString(1, name);
-            statement.setString(2, circuit);
-            statement.setString(3, country);
-            statement.setString(4, city);
-            statement.setInt(5, grandPrixId);
-            requireSingleUpdate(
-                statement,
-                "Gran Premio non trovato durante l'aggiornamento"
-            );
-        }
     }
 
     public void insertWeekend(
@@ -409,6 +381,112 @@ public final class AdminDao {
         }
     }
 
+    public void deleteEdition(
+        final Connection connection,
+        final int editionId
+    ) throws SQLException {
+        deleteOne(
+            connection,
+            DELETE_EDITION,
+            "Edizione non trovata durante la rimozione",
+            editionId
+        );
+    }
+
+    public void deleteGrandPrix(
+        final Connection connection,
+        final int grandPrixId
+    ) throws SQLException {
+        deleteOne(
+            connection,
+            DELETE_GRAND_PRIX,
+            "Gran Premio non trovato durante la rimozione",
+            grandPrixId
+        );
+    }
+
+    public void deleteWeekend(
+        final Connection connection,
+        final int editionId,
+        final int grandPrixId
+    ) throws SQLException {
+        deleteOne(
+            connection,
+            DELETE_WEEKEND,
+            "Weekend non trovato durante la rimozione",
+            editionId,
+            grandPrixId
+        );
+    }
+
+    public void deleteConstructor(
+        final Connection connection,
+        final int constructorId
+    ) throws SQLException {
+        deleteOne(
+            connection,
+            DELETE_CONSTRUCTOR,
+            "Scuderia non trovata durante la rimozione",
+            constructorId
+        );
+    }
+
+    public void deleteConstructorEnrollment(
+        final Connection connection,
+        final int editionId,
+        final int constructorId
+    ) throws SQLException {
+        deleteOne(
+            connection,
+            DELETE_CONSTRUCTOR_ENROLLMENT,
+            "Iscrizione della scuderia non trovata durante la rimozione",
+            editionId,
+            constructorId
+        );
+    }
+
+    public void deleteDriver(
+        final Connection connection,
+        final int driverId
+    ) throws SQLException {
+        deleteOne(
+            connection,
+            DELETE_DRIVER,
+            "Pilota non trovato durante la rimozione",
+            driverId
+        );
+    }
+
+    public void deleteDriverEnrollment(
+        final Connection connection,
+        final int editionId,
+        final int driverId
+    ) throws SQLException {
+        deleteOne(
+            connection,
+            DELETE_DRIVER_ENROLLMENT,
+            "Iscrizione del pilota non trovata durante la rimozione",
+            editionId,
+            driverId
+        );
+    }
+
+    public void deletePerformance(
+        final Connection connection,
+        final int editionId,
+        final int grandPrixId,
+        final int driverId
+    ) throws SQLException {
+        deleteOne(
+            connection,
+            DELETE_PERFORMANCE,
+            "Prestazione non trovata durante la rimozione",
+            editionId,
+            grandPrixId,
+            driverId
+        );
+    }
+
     public int countWeekends(
         final Connection connection,
         final int editionId
@@ -455,6 +533,112 @@ public final class AdminDao {
         }
     }
 
+    public int countGrandPrixWeekends(
+        final Connection connection,
+        final int grandPrixId
+    ) throws SQLException {
+        return count(connection, """
+            SELECT COUNT(*)
+            FROM WEEKEND_DI_GARA
+            WHERE IdGranPremio = ?
+            """, grandPrixId);
+    }
+
+    public int countConstructorEnrollments(
+        final Connection connection,
+        final int constructorId
+    ) throws SQLException {
+        return count(connection, """
+            SELECT COUNT(*)
+            FROM SCUDERIA_ISCRITTA
+            WHERE IdScuderia = ?
+            """, constructorId);
+    }
+
+    public int countDriverEnrollments(
+        final Connection connection,
+        final int driverId
+    ) throws SQLException {
+        return count(connection, """
+            SELECT COUNT(*)
+            FROM PILOTA_ISCRITTO
+            WHERE IdPilota = ?
+            """, driverId);
+    }
+
+    public int countWeekendPerformances(
+        final Connection connection,
+        final int editionId,
+        final int grandPrixId
+    ) throws SQLException {
+        return count(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM PRESTAZIONE_WEEKEND
+            WHERE IdEdizione = ? AND IdGranPremio = ?
+            """,
+            editionId,
+            grandPrixId
+        );
+    }
+
+    public int countDriverPerformances(
+        final Connection connection,
+        final int editionId,
+        final int driverId
+    ) throws SQLException {
+        return count(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM PRESTAZIONE_WEEKEND
+            WHERE IdEdizione = ? AND IdPilota = ?
+            """,
+            editionId,
+            driverId
+        );
+    }
+
+    public int countDriverTeamSelections(
+        final Connection connection,
+        final int editionId,
+        final int driverId
+    ) throws SQLException {
+        return count(
+            connection,
+            """
+            SELECT COUNT(*)
+            FROM COMPOSIZIONE_TEAM
+            WHERE IdEdizione = ? AND IdPilota = ?
+            """,
+            editionId,
+            driverId
+        );
+    }
+
+    public int countEditionTeams(
+        final Connection connection,
+        final int editionId
+    ) throws SQLException {
+        return count(connection, """
+            SELECT COUNT(*)
+            FROM TEAM_FANTASY
+            WHERE IdEdizione = ?
+            """, editionId);
+    }
+
+    public int countEditionLeagues(
+        final Connection connection,
+        final int editionId
+    ) throws SQLException {
+        return count(connection, """
+            SELECT COUNT(*)
+            FROM LEGA
+            WHERE IdEdizione = ?
+            """, editionId);
+    }
+
     public boolean isGrandPrixPresent(
         final Connection connection,
         final int grandPrixId
@@ -498,6 +682,44 @@ public final class AdminDao {
                 return result.next();
             }
         }
+    }
+
+    public boolean isDriverEnrolled(
+        final Connection connection,
+        final int editionId,
+        final int driverId
+    ) throws SQLException {
+        return exists(
+            connection,
+            """
+            SELECT 1
+            FROM PILOTA_ISCRITTO
+            WHERE IdEdizione = ? AND IdPilota = ?
+            """,
+            editionId,
+            driverId
+        );
+    }
+
+    public boolean isPerformancePresent(
+        final Connection connection,
+        final int editionId,
+        final int grandPrixId,
+        final int driverId
+    ) throws SQLException {
+        return exists(
+            connection,
+            """
+            SELECT 1
+            FROM PRESTAZIONE_WEEKEND
+            WHERE IdEdizione = ?
+              AND IdGranPremio = ?
+              AND IdPilota = ?
+            """,
+            editionId,
+            grandPrixId,
+            driverId
+        );
     }
 
     public boolean performanceContextExists(
@@ -782,10 +1004,10 @@ public final class AdminDao {
     private static int count(
         final Connection connection,
         final String sql,
-        final int id
+        final int... ids
     ) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setInt(1, id);
+            setIds(statement, ids);
             try (ResultSet result = statement.executeQuery()) {
                 result.next();
                 return result.getInt(1);
@@ -796,10 +1018,10 @@ public final class AdminDao {
     private static boolean exists(
         final Connection connection,
         final String sql,
-        final int id
+        final int... ids
     ) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setInt(1, id);
+            setIds(statement, ids);
             try (ResultSet result = statement.executeQuery()) {
                 return result.next();
             }
@@ -832,6 +1054,27 @@ public final class AdminDao {
     ) throws SQLException {
         if (statement.executeUpdate() != 1) {
             throw new SQLException(failureMessage);
+        }
+    }
+
+    private static void deleteOne(
+        final Connection connection,
+        final String sql,
+        final String failureMessage,
+        final int... ids
+    ) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            setIds(statement, ids);
+            requireSingleUpdate(statement, failureMessage);
+        }
+    }
+
+    private static void setIds(
+        final PreparedStatement statement,
+        final int... ids
+    ) throws SQLException {
+        for (int index = 0; index < ids.length; index++) {
+            statement.setInt(index + 1, ids[index]);
         }
     }
 

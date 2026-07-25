@@ -29,7 +29,7 @@ final class AdminCrudH2Test {
     );
 
     @Test
-    void a1ThroughA7CreateUpdateAndExposeTheOfficialCatalogs() {
+    void a1ThroughA7CreateAndExposeTheOfficialCatalogs() {
         final TestDatabase database = new TestDatabase();
         final AdminService admin = new ApplicationServices(
             database,
@@ -50,22 +50,15 @@ final class AdminCrudH2Test {
             "Italia",
             "Imola"
         );
-        admin.updateGrandPrix(
-            grandPrixId,
-            "Gran Premio Demo aggiornato",
-            "Circuito aggiornato",
-            "Italia",
-            "Monza"
-        );
         assertEquals(
-            "Circuito aggiornato",
+            "Circuito iniziale",
             database.queryString(
                 "SELECT Circuito FROM GRAN_PREMIO WHERE IdGranPremio = ?",
                 grandPrixId
             )
         );
         assertEquals(
-            "Gran Premio Demo aggiornato",
+            "Gran Premio Demo",
             database.queryString(
                 "SELECT Nome FROM GRAN_PREMIO WHERE IdGranPremio = ?",
                 grandPrixId

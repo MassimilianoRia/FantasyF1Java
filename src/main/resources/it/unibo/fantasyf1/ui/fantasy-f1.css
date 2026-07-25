@@ -115,6 +115,10 @@
     -fx-padding: 9px 12px;
 }
 
+.status-bar .log-text {
+    -fx-font-weight: normal;
+}
+
 .button {
     -fx-background-color: white;
     -fx-text-fill: #34404b;

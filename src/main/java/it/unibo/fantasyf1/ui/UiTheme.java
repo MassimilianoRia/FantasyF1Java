@@ -2,6 +2,7 @@ package it.unibo.fantasyf1.ui;
 
 import javafx.scene.Node;
 import javafx.scene.Scene;
+import javafx.scene.control.ButtonBase;
 import javafx.scene.control.DialogPane;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
@@ -46,6 +47,9 @@ public final class UiTheme {
         listView.addEventFilter(MouseEvent.MOUSE_PRESSED, event -> {
             Node target = event.getPickResult().getIntersectedNode();
             while (target != null && target != listView) {
+                if (target instanceof ButtonBase) {
+                    return;
+                }
                 if (target instanceof ListCell<?>) {
                     event.consume();
                     return;

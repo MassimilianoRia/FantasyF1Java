@@ -13,7 +13,6 @@ import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
-import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
@@ -28,7 +27,6 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
@@ -203,7 +201,7 @@ final class TeamTabView {
         );
         HBox.setHgrow(teamName, Priority.ALWAYS);
         final Label instructions = new Label(
-            "Clicca una riga oppure il tasto + per aggiungere un pilota. "
+            "Clicca una riga per selezionare un pilota. "
                 + "Clicca di nuovo per rimuoverlo; servono esattamente "
                 + "quattro piloti."
         );
@@ -538,19 +536,12 @@ final class TeamTabView {
         extends ListCell<DriverOption> {
 
         private final Label description = new Label();
-        private final Button toggle = new Button("+");
         private final HBox content;
 
         DriverSelectionCell() {
-            final Region spacer = new Region();
-            HBox.setHgrow(spacer, Priority.ALWAYS);
-            toggle.setMinWidth(38);
-            toggle.setFocusTraversable(true);
-            toggle.getStyleClass().add("compact-button");
-            content = new HBox(10, description, spacer, toggle);
-            content.setAlignment(Pos.CENTER_LEFT);
+            content = new HBox(description);
+            content.setStyle("-fx-padding: 5px;");
 
-            toggle.setOnAction(event -> toggleSelection());
             addEventFilter(MouseEvent.MOUSE_PRESSED, event -> {
                 if (
                     event.getButton() == MouseButton.PRIMARY
@@ -560,9 +551,6 @@ final class TeamTabView {
                     event.consume();
                 }
             });
-            selectedProperty().addListener(
-                (observable, previous, selected) -> updateToggle()
-            );
         }
 
         @Override
@@ -577,7 +565,6 @@ final class TeamTabView {
             } else {
                 description.setText(driver.toString());
                 setGraphic(content);
-                updateToggle();
             }
             setText(null);
         }
@@ -593,23 +580,6 @@ final class TeamTabView {
                 selection.select(getIndex());
             }
             driverOptions.requestFocus();
-            updateToggle();
-        }
-
-        private void updateToggle() {
-            if (isEmpty() || getIndex() < 0) {
-                return;
-            }
-            final var selection = driverOptions.getSelectionModel();
-            final boolean selected = selection.isSelected(getIndex());
-            toggle.setText(selected ? "✓" : "+");
-            toggle.setAccessibleText(
-                selected ? "Rimuovi pilota" : "Aggiungi pilota"
-            );
-            toggle.setDisable(
-                !selected && selection.getSelectedItems().size() >= 4
-            );
-            content.setStyle("-fx-padding: 5px;");
         }
     }
 
