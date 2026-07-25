@@ -17,6 +17,7 @@ import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Operazioni JDBC riservate all'area amministrativa trusted.
@@ -97,13 +98,38 @@ public final class AdminDao {
             (IdGranPremio, IdEdizione, IdPilota,
              PosizionamentoQualifica, PosizionamentoGara,
              Penalizzato, RegistraGiroVeloce, PunteggioFantasy)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        SELECT
+            W.IdGranPremio,
+            W.IdEdizione,
+            ?,
+            ?, ?, ?, ?, NULL
+        FROM WEEKEND_DI_GARA W
+        WHERE W.IdEdizione = ?
+          AND W.IdGranPremio = ?
+          AND W.Concluso = FALSE
         ON DUPLICATE KEY UPDATE
             PosizionamentoQualifica = VALUES(PosizionamentoQualifica),
             PosizionamentoGara = VALUES(PosizionamentoGara),
             Penalizzato = VALUES(Penalizzato),
             RegistraGiroVeloce = VALUES(RegistraGiroVeloce),
-            PunteggioFantasy = VALUES(PunteggioFantasy)
+            PunteggioFantasy = NULL
+        """;
+
+    private static final String FIND_WEEKEND_CONCLUSION = """
+        SELECT Concluso
+        FROM WEEKEND_DI_GARA
+        WHERE IdEdizione = ? AND IdGranPremio = ?
+        """;
+
+    private static final String LOCK_WEEKEND_CONCLUSION =
+        FIND_WEEKEND_CONCLUSION + " FOR UPDATE";
+
+    private static final String CONCLUDE_WEEKEND = """
+        UPDATE WEEKEND_DI_GARA
+        SET Concluso = TRUE
+        WHERE IdEdizione = ?
+          AND IdGranPremio = ?
+          AND Concluso = FALSE
         """;
 
     private static final String FIND_GRAND_PRIX = """
@@ -138,7 +164,8 @@ public final class AdminDao {
             W.NumeroRound,
             G.Nome,
             W.DataInizio,
-            W.DataFine
+            W.DataFine,
+            W.Concluso
         FROM WEEKEND_DI_GARA W
         JOIN GRAN_PREMIO G ON G.IdGranPremio = W.IdGranPremio
         WHERE W.IdEdizione = ?
@@ -326,19 +353,17 @@ public final class AdminDao {
         final int editionId,
         final int grandPrixId,
         final int driverId,
-        final PerformanceData data,
-        final int fantasyPoints
+        final PerformanceData data
     ) throws SQLException {
         try (PreparedStatement statement =
                  connection.prepareStatement(UPSERT_PERFORMANCE)) {
-            statement.setInt(1, grandPrixId);
-            statement.setInt(2, editionId);
-            statement.setInt(3, driverId);
-            setNullableInt(statement, 4, data.qualifyingPosition());
-            setNullableInt(statement, 5, data.racePosition());
-            statement.setBoolean(6, data.penalized());
-            statement.setBoolean(7, data.fastestLap());
-            statement.setInt(8, fantasyPoints);
+            statement.setInt(1, driverId);
+            setNullableInt(statement, 2, data.qualifyingPosition());
+            setNullableInt(statement, 3, data.racePosition());
+            statement.setBoolean(4, data.penalized());
+            statement.setBoolean(5, data.fastestLap());
+            statement.setInt(6, editionId);
+            statement.setInt(7, grandPrixId);
             statement.executeUpdate();
         }
     }
@@ -457,21 +482,61 @@ public final class AdminDao {
         }
     }
 
-    public boolean weekendExists(
+    public Optional<Boolean> findWeekendConclusion(
         final Connection connection,
         final int editionId,
         final int grandPrixId
     ) throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement("""
-            SELECT 1
-            FROM WEEKEND_DI_GARA
-            WHERE IdEdizione = ? AND IdGranPremio = ?
-            """)) {
+        return findWeekendConclusion(
+            connection,
+            editionId,
+            grandPrixId,
+            false
+        );
+    }
+
+    public Optional<Boolean> lockWeekendConclusion(
+        final Connection connection,
+        final int editionId,
+        final int grandPrixId
+    ) throws SQLException {
+        return findWeekendConclusion(
+            connection,
+            editionId,
+            grandPrixId,
+            true
+        );
+    }
+
+    private Optional<Boolean> findWeekendConclusion(
+        final Connection connection,
+        final int editionId,
+        final int grandPrixId,
+        final boolean lock
+    ) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+            lock ? LOCK_WEEKEND_CONCLUSION : FIND_WEEKEND_CONCLUSION
+        )) {
             statement.setInt(1, editionId);
             statement.setInt(2, grandPrixId);
             try (ResultSet result = statement.executeQuery()) {
-                return result.next();
+                return result.next()
+                    ? Optional.of(result.getBoolean("Concluso"))
+                    : Optional.empty();
             }
+        }
+    }
+
+    public int concludeWeekend(
+        final Connection connection,
+        final int editionId,
+        final int grandPrixId
+    ) throws SQLException {
+        try (PreparedStatement statement =
+                 connection.prepareStatement(CONCLUDE_WEEKEND)) {
+            statement.setInt(1, editionId);
+            statement.setInt(2, grandPrixId);
+            return statement.executeUpdate();
         }
     }
 
@@ -576,7 +641,8 @@ public final class AdminDao {
                         result.getInt("NumeroRound"),
                         result.getString("Nome"),
                         result.getDate("DataInizio").toLocalDate(),
-                        result.getDate("DataFine").toLocalDate()
+                        result.getDate("DataFine").toLocalDate(),
+                        result.getBoolean("Concluso")
                     ));
                 }
             }

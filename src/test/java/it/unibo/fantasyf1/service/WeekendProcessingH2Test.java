@@ -5,7 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import it.unibo.fantasyf1.error.AppException;
+import it.unibo.fantasyf1.error.ErrorCode;
+import it.unibo.fantasyf1.model.StandingRow;
 import it.unibo.fantasyf1.model.WeekendScoreRow;
+import it.unibo.fantasyf1.model.dao.AdminDao;
+import it.unibo.fantasyf1.model.dao.ResultDao;
+import it.unibo.fantasyf1.model.database.TransactionManager;
 import it.unibo.fantasyf1.scoring.PerformanceData;
 import it.unibo.fantasyf1.scoring.SimpleScoringPolicy;
 import it.unibo.fantasyf1.security.Pbkdf2PasswordHasher;
@@ -37,6 +43,7 @@ final class WeekendProcessingH2Test {
     private SimpleScoringPolicy scoring;
     private AdminService admin;
     private TeamService teams;
+    private LeagueService leagues;
 
     @BeforeEach
     void setUp() {
@@ -53,26 +60,76 @@ final class WeekendProcessingH2Test {
         );
         admin = services.admin();
         teams = services.teams();
+        leagues = services.leagues();
     }
 
     @Test
-    void o2IsAbsentUntilFourScoresThenO3AndU8AreAvailable() {
+    void a8StoresOnlyOpenPerformancesAndU8WaitsForA9() {
         final WeekendFixture weekend = completeWeekendFixture();
         final List<PerformanceData> performances = performances();
 
-        for (int index = 0; index < 3; index++) {
-            final ProcessingOutcome outcome = record(
-                weekend,
-                index,
-                performances.get(index)
-            );
-            assertFalse(outcome.weekendProcessable());
+        for (int index = 0; index < performances.size(); index++) {
+            record(weekend, index, performances.get(index));
         }
+        database.update(
+            """
+            UPDATE PRESTAZIONE_WEEKEND
+            SET PunteggioFantasy = 123
+            WHERE IdEdizione = ? AND IdGranPremio = ? AND IdPilota = ?
+            """,
+            weekend.editionId(),
+            weekend.grandPrixId(),
+            weekend.driverIds().getFirst()
+        );
+        database.update(
+            """
+            INSERT INTO RISULTATO_TEAM
+                (IdEdizione, IdGranPremio, IdTeam, PunteggioWeekend)
+            VALUES (?, ?, ?, 123)
+            """,
+            weekend.editionId(),
+            weekend.grandPrixId(),
+            weekend.teamId()
+        );
+        database.update(
+            "UPDATE TEAM_FANTASY SET PunteggioTotale = 123 WHERE IdTeam = ?",
+            weekend.teamId()
+        );
+        record(weekend, 0, performances.getFirst());
+
+        assertFalse(admin.weekends(weekend.editionId()).getFirst().concluded());
+        assertEquals(
+            4,
+            database.queryInt(
+                """
+                SELECT COUNT(*) FROM PRESTAZIONE_WEEKEND
+                WHERE IdEdizione = ? AND IdGranPremio = ?
+                """,
+                weekend.editionId(),
+                weekend.grandPrixId()
+            )
+        );
         assertEquals(
             0,
             database.queryInt(
-                "SELECT COUNT(*) FROM RISULTATO_TEAM WHERE IdTeam = ?",
-                weekend.teamId()
+                """
+                SELECT COUNT(*) FROM PRESTAZIONE_WEEKEND
+                WHERE IdEdizione = ? AND IdGranPremio = ?
+                  AND PunteggioFantasy IS NOT NULL
+                """,
+                weekend.editionId(),
+                weekend.grandPrixId()
+            )
+        );
+        assertEquals(
+            0,
+            database.queryInt(
+                """
+                SELECT COUNT(*) FROM RISULTATO_TEAM
+                WHERE IdEdizione = ? AND IdGranPremio = ?
+                """,
+                weekend.editionId(),
+                weekend.grandPrixId()
             )
         );
         assertEquals(
@@ -82,16 +139,84 @@ final class WeekendProcessingH2Test {
                 weekend.teamId()
             )
         );
-
-        final ProcessingOutcome fourth = record(
-            weekend,
-            3,
-            performances.get(3)
+        assertThrows(
+            AppException.class,
+            () -> new TransactionManager(database).inTransaction(
+                connection -> {
+                    new ResultDao().updateFantasyScore(
+                        connection,
+                        weekend.editionId(),
+                        weekend.grandPrixId(),
+                        weekend.driverIds().getFirst(),
+                        999
+                    );
+                    return null;
+                }
+            )
         );
+
+        final AppException unavailable = assertThrows(
+            AppException.class,
+            () -> teams.weekendBreakdown(
+                weekend.teamId(),
+                weekend.editionId(),
+                weekend.grandPrixId()
+            )
+        );
+        assertEquals(ErrorCode.CONFLICT, unavailable.code());
+    }
+
+    @Test
+    void a9RequiresEveryPerformanceThenCalculatesAndLocksTheWeekend() {
+        final WeekendFixture weekend = completeWeekendFixture();
+        final List<PerformanceData> performances = performances();
+        for (int index = 0; index < 3; index++) {
+            record(weekend, index, performances.get(index));
+        }
+
+        final AppException incomplete = assertThrows(
+            AppException.class,
+            () -> admin.concludeWeekend(
+                weekend.editionId(),
+                weekend.grandPrixId()
+            )
+        );
+        assertEquals(ErrorCode.CONFLICT, incomplete.code());
+        assertEquals(
+            0,
+            database.queryInt(
+                """
+                SELECT COUNT(*) FROM WEEKEND_DI_GARA
+                WHERE IdEdizione = ? AND IdGranPremio = ?
+                  AND Concluso = TRUE
+                """,
+                weekend.editionId(),
+                weekend.grandPrixId()
+            )
+        );
+
+        record(weekend, 3, performances.get(3));
+        admin.concludeWeekend(
+            weekend.editionId(),
+            weekend.grandPrixId()
+        );
+
         final int expected = performances.stream()
             .mapToInt(scoring::score)
             .sum();
-        assertTrue(fourth.weekendProcessable());
+        assertTrue(admin.weekends(weekend.editionId()).getFirst().concluded());
+        assertEquals(
+            4,
+            database.queryInt(
+                """
+                SELECT COUNT(*) FROM PRESTAZIONE_WEEKEND
+                WHERE IdEdizione = ? AND IdGranPremio = ?
+                  AND PunteggioFantasy IS NOT NULL
+                """,
+                weekend.editionId(),
+                weekend.grandPrixId()
+            )
+        );
         assertEquals(
             expected,
             database.queryInt(
@@ -118,105 +243,91 @@ final class WeekendProcessingH2Test {
         );
         assertEquals(4, breakdown.size());
         assertEquals(
-            performances.stream()
-                .map(scoring::score)
-                .sorted()
-                .toList(),
+            performances.stream().map(scoring::score).sorted().toList(),
             breakdown.stream()
                 .map(WeekendScoreRow::fantasyPoints)
                 .sorted()
                 .toList()
         );
-    }
 
-    @Test
-    void processingIsIdempotentCorrectionCascadesAndHistoricalTeamCatchesUp() {
-        final WeekendFixture weekend = completeWeekendFixture();
-        final List<PerformanceData> original = performances();
-        for (int index = 0; index < original.size(); index++) {
-            record(weekend, index, original.get(index));
-        }
-        final int originalTotal = original.stream()
-            .mapToInt(scoring::score)
-            .sum();
+        final AppException secondConclusion = assertThrows(
+            AppException.class,
+            () -> admin.concludeWeekend(
+                weekend.editionId(),
+                weekend.grandPrixId()
+            )
+        );
+        assertEquals(ErrorCode.CONFLICT, secondConclusion.code());
 
-        assertTrue(admin.processWeekend(
-            weekend.editionId(),
-            weekend.grandPrixId()
-        ));
-        assertTrue(admin.processWeekend(
-            weekend.editionId(),
-            weekend.grandPrixId()
-        ));
+        final AppException correction = assertThrows(
+            AppException.class,
+            () -> record(
+                weekend,
+                0,
+                new PerformanceData(20, 20, false, false)
+            )
+        );
+        assertEquals(ErrorCode.CONFLICT, correction.code());
+        new TransactionManager(database).inTransaction(connection -> {
+            new AdminDao().upsertPerformance(
+                connection,
+                weekend.editionId(),
+                weekend.grandPrixId(),
+                weekend.driverIds().getFirst(),
+                new PerformanceData(20, 20, false, false)
+            );
+            return null;
+        });
         assertEquals(
             1,
             database.queryInt(
                 """
-                SELECT COUNT(*) FROM RISULTATO_TEAM
-                WHERE IdTeam = ? AND IdGranPremio = ?
+                SELECT PosizionamentoQualifica
+                FROM PRESTAZIONE_WEEKEND
+                WHERE IdEdizione = ? AND IdGranPremio = ? AND IdPilota = ?
                 """,
-                weekend.teamId(),
-                weekend.grandPrixId()
+                weekend.editionId(),
+                weekend.grandPrixId(),
+                weekend.driverIds().getFirst()
             )
         );
         assertEquals(
-            originalTotal,
+            expected,
             database.queryInt(
                 "SELECT PunteggioTotale FROM TEAM_FANTASY WHERE IdTeam = ?",
                 weekend.teamId()
-            )
-        );
-
-        final PerformanceData correction =
-            new PerformanceData(20, 20, false, false);
-        final ProcessingOutcome corrected = record(
-            weekend,
-            0,
-            correction
-        );
-        final int correctedTotal = originalTotal
-            - scoring.score(original.get(0))
-            + scoring.score(correction);
-        assertTrue(corrected.weekendProcessable());
-        assertEquals(
-            correctedTotal,
-            database.queryInt(
-                "SELECT PunteggioTotale FROM TEAM_FANTASY WHERE IdTeam = ?",
-                weekend.teamId()
-            )
-        );
-
-        final int historicalOwner =
-            fixtures.user("historical.owner", "unused-hash");
-        sessions.login(historicalOwner, "historical.owner");
-        final int historicalTeam = teams.createTeam(
-            "Team creato dopo il weekend",
-            weekend.editionId(),
-            weekend.driverIds()
-        );
-        assertEquals(
-            correctedTotal,
-            database.queryInt(
-                "SELECT PunteggioTotale FROM TEAM_FANTASY WHERE IdTeam = ?",
-                historicalTeam
-            )
-        );
-        assertEquals(
-            correctedTotal,
-            database.queryInt(
-                """
-                SELECT PunteggioWeekend FROM RISULTATO_TEAM
-                WHERE IdTeam = ? AND IdGranPremio = ?
-                """,
-                historicalTeam,
-                weekend.grandPrixId()
             )
         );
     }
 
     @Test
-    void aFailureDuringO1RollsBackThePerformanceAndDerivedData() {
+    void administrativeConclusionDoesNotDependOnEndDate() {
         final WeekendFixture weekend = completeWeekendFixture();
+        for (int index = 0; index < performances().size(); index++) {
+            record(weekend, index, performances().get(index));
+        }
+
+        // La fixture termina nel 2030, molto dopo il Clock fisso del test.
+        admin.concludeWeekend(
+            weekend.editionId(),
+            weekend.grandPrixId()
+        );
+
+        assertTrue(admin.weekends(weekend.editionId()).getFirst().concluded());
+        final AppException missing = assertThrows(
+            AppException.class,
+            () -> admin.concludeWeekend(weekend.editionId(), 999_999)
+        );
+        assertEquals(ErrorCode.NOT_FOUND, missing.code());
+    }
+
+    @Test
+    void o1FailureRollsBackA9IncludingTheConclusionFlag() {
+        final WeekendFixture weekend = completeWeekendFixture();
+        for (int index = 0; index < performances().size(); index++) {
+            record(weekend, index, performances().get(index));
+        }
+
         final AtomicInteger invocations = new AtomicInteger();
         final var failingPolicy =
             (it.unibo.fantasyf1.scoring.ScoringPolicy) performance -> {
@@ -235,23 +346,30 @@ final class WeekendProcessingH2Test {
 
         assertThrows(
             IllegalStateException.class,
-            () -> failingAdmin.recordPerformance(new PerformanceRequest(
+            () -> failingAdmin.concludeWeekend(
                 weekend.editionId(),
-                weekend.grandPrixId(),
-                weekend.driverIds().getFirst(),
-                1,
-                1,
-                false,
-                false
-            ))
+                weekend.grandPrixId()
+            )
         );
-
+        assertEquals(
+            0,
+            database.queryInt(
+                """
+                SELECT COUNT(*) FROM WEEKEND_DI_GARA
+                WHERE IdEdizione = ? AND IdGranPremio = ?
+                  AND Concluso = TRUE
+                """,
+                weekend.editionId(),
+                weekend.grandPrixId()
+            )
+        );
         assertEquals(
             0,
             database.queryInt(
                 """
                 SELECT COUNT(*) FROM PRESTAZIONE_WEEKEND
                 WHERE IdEdizione = ? AND IdGranPremio = ?
+                  AND PunteggioFantasy IS NOT NULL
                 """,
                 weekend.editionId(),
                 weekend.grandPrixId()
@@ -266,6 +384,98 @@ final class WeekendProcessingH2Test {
                 """,
                 weekend.editionId(),
                 weekend.grandPrixId()
+            )
+        );
+    }
+
+    @Test
+    void o2O3AndStandingsIgnoreEveryOpenWeekend() {
+        final WeekendFixture weekend = completeWeekendFixture();
+        final List<PerformanceData> performances = performances();
+        for (int index = 0; index < performances.size(); index++) {
+            record(weekend, index, performances.get(index));
+        }
+        admin.concludeWeekend(
+            weekend.editionId(),
+            weekend.grandPrixId()
+        );
+        final int expected = performances.stream()
+            .mapToInt(scoring::score)
+            .sum();
+
+        final int openGrandPrix = fixtures.grandPrix("Aperto");
+        fixtures.weekend(
+            weekend.editionId(),
+            openGrandPrix,
+            2,
+            LocalDate.of(2020, 1, 1),
+            LocalDate.of(2020, 1, 3)
+        );
+        database.update(
+            """
+            INSERT INTO RISULTATO_TEAM
+                (IdEdizione, IdGranPremio, IdTeam, PunteggioWeekend)
+            VALUES (?, ?, ?, 999)
+            """,
+            weekend.editionId(),
+            openGrandPrix,
+            weekend.teamId()
+        );
+
+        final ResultDao resultDao = new ResultDao();
+        new TransactionManager(database).inTransaction(
+            connection -> {
+                resultDao.recalculateEditionTotals(
+                    connection,
+                    weekend.editionId()
+                );
+                return null;
+            }
+        );
+        assertEquals(
+            expected,
+            database.queryInt(
+                "SELECT PunteggioTotale FROM TEAM_FANTASY WHERE IdTeam = ?",
+                weekend.teamId()
+            )
+        );
+
+        final int leagueId = fixtures.league(
+            "Classifica conclusi",
+            weekend.ownerId(),
+            weekend.editionId()
+        );
+        fixtures.participation(leagueId, weekend.teamId());
+        final List<StandingRow> standings = leagues.standings(
+            leagueId,
+            weekend.editionId()
+        );
+        assertEquals(1, standings.size());
+        assertEquals(expected, standings.getFirst().totalPoints());
+
+        final int laterOwner = fixtures.user("later.owner", "unused-hash");
+        sessions.login(laterOwner, "later.owner");
+        final int laterTeam = teams.createTeam(
+            "Team creato dopo A9",
+            weekend.editionId(),
+            weekend.driverIds()
+        );
+        assertEquals(
+            expected,
+            database.queryInt(
+                "SELECT PunteggioTotale FROM TEAM_FANTASY WHERE IdTeam = ?",
+                laterTeam
+            )
+        );
+        assertEquals(
+            0,
+            database.queryInt(
+                """
+                SELECT COUNT(*) FROM RISULTATO_TEAM
+                WHERE IdTeam = ? AND IdGranPremio = ?
+                """,
+                laterTeam,
+                openGrandPrix
             )
         );
     }
@@ -300,13 +510,13 @@ final class WeekendProcessingH2Test {
                 driverIds.add(driverId);
             }
         }
-        final int grandPrixId = fixtures.grandPrix("Elaborabile");
+        final int grandPrixId = fixtures.grandPrix("Convalidabile");
         fixtures.weekend(
             editionId,
             grandPrixId,
             1,
-            LocalDate.of(2026, 7, 17),
-            LocalDate.of(2026, 7, 20)
+            LocalDate.of(2030, 7, 17),
+            LocalDate.of(2030, 7, 20)
         );
         final int teamId = fixtures.team(
             "Weekend Team",
@@ -318,6 +528,7 @@ final class WeekendProcessingH2Test {
             fixtures.component(teamId, editionId, driverId);
         }
         return new WeekendFixture(
+            ownerId,
             editionId,
             grandPrixId,
             teamId,
@@ -325,12 +536,12 @@ final class WeekendProcessingH2Test {
         );
     }
 
-    private ProcessingOutcome record(
+    private void record(
         final WeekendFixture weekend,
         final int driverIndex,
         final PerformanceData data
     ) {
-        return admin.recordPerformance(new PerformanceRequest(
+        admin.recordPerformance(new PerformanceRequest(
             weekend.editionId(),
             weekend.grandPrixId(),
             weekend.driverIds().get(driverIndex),
@@ -351,6 +562,7 @@ final class WeekendProcessingH2Test {
     }
 
     private record WeekendFixture(
+        int ownerId,
         int editionId,
         int grandPrixId,
         int teamId,

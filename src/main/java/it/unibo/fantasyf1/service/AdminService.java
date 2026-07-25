@@ -10,7 +10,6 @@ import it.unibo.fantasyf1.model.GrandPrixOption;
 import it.unibo.fantasyf1.model.RaceWeekend;
 import it.unibo.fantasyf1.model.dao.AdminDao;
 import it.unibo.fantasyf1.model.dao.EdizioneDao;
-import it.unibo.fantasyf1.model.dao.ResultDao;
 import it.unibo.fantasyf1.model.dao.TeamDao;
 import it.unibo.fantasyf1.model.database.TransactionManager;
 import it.unibo.fantasyf1.validation.InputValidator;
@@ -22,7 +21,7 @@ import java.util.Locale;
 import java.util.Objects;
 
 /**
- * A1–A8. Questa classe è usata soltanto dalla modalità amministratore trusted.
+ * A1–A9. Questa classe è usata soltanto dalla modalità amministratore trusted.
  */
 public final class AdminService {
 
@@ -30,7 +29,6 @@ public final class AdminService {
     private final AdminDao admin;
     private final EdizioneDao editions;
     private final TeamDao teams;
-    private final ResultDao results;
     private final WeekendProcessingService processing;
     private final Clock clock;
 
@@ -39,7 +37,6 @@ public final class AdminService {
         final AdminDao admin,
         final EdizioneDao editions,
         final TeamDao teams,
-        final ResultDao results,
         final WeekendProcessingService processing,
         final Clock clock
     ) {
@@ -47,7 +44,6 @@ public final class AdminService {
         this.admin = Objects.requireNonNull(admin);
         this.editions = Objects.requireNonNull(editions);
         this.teams = Objects.requireNonNull(teams);
-        this.results = Objects.requireNonNull(results);
         this.processing = Objects.requireNonNull(processing);
         this.clock = Objects.requireNonNull(clock);
     }
@@ -305,46 +301,20 @@ public final class AdminService {
                 raceNumber,
                 constructorId
             );
-
-            // L'aggiunta di un pilota rende non definitivi i weekend per cui
-            // manca la nuova prestazione: rimuove O2 e riallinea O3.
-            final LocalDate today = LocalDate.now(clock);
-            for (int grandPrixId :
-                results.findEndedWeekendIds(connection, editionId, today)) {
-                if (results.isProcessable(
-                    connection,
-                    editionId,
-                    grandPrixId,
-                    today
-                )) {
-                    results.recalculateWeekendResults(
-                        connection,
-                        editionId,
-                        grandPrixId
-                    );
-                } else {
-                    results.clearWeekendResults(
-                        connection,
-                        editionId,
-                        grandPrixId
-                    );
-                }
-            }
-            results.recalculateEditionTotals(connection, editionId);
         });
     }
 
-    public ProcessingOutcome recordPerformance(
+    public void recordPerformance(
         final PerformanceRequest request
     ) {
-        return processing.recordPerformance(request);
+        processing.recordPerformance(request);
     }
 
-    public boolean processWeekend(
+    public void concludeWeekend(
         final int editionId,
         final int grandPrixId
     ) {
-        return processing.processWeekend(editionId, grandPrixId);
+        processing.concludeWeekend(editionId, grandPrixId);
     }
 
     public List<Edizione> editions() {

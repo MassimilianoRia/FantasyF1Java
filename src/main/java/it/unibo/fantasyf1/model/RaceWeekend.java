@@ -12,7 +12,8 @@ public record RaceWeekend(
     int round,
     String grandPrixName,
     LocalDate startDate,
-    LocalDate endDate
+    LocalDate endDate,
+    boolean concluded
 ) {
 
     public RaceWeekend {
@@ -37,10 +38,11 @@ public record RaceWeekend(
 
     @Override
     public String toString() {
-        return "Round %d — %s (%s)".formatted(
+        return "Round %d — %s (%s) · %s".formatted(
             round,
             grandPrixName,
-            endDate
+            endDate,
+            concluded ? "Concluso" : "Non concluso"
         );
     }
 }

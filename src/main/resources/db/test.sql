@@ -98,7 +98,7 @@ WHERE TF.IdUtente = @id_utente_riferimento
 ORDER BY L.Nome, TF.Nome;
 
 
--- U8 - Dettaglio dei punteggi di un team in un weekend terminato.
+-- U8 - Dettaglio dei punteggi di un team in un weekend concluso.
 -- Atteso dal seed: quattro righe, con punteggi coerenti con posizione,
 -- penalizzazione e giro veloce.
 SELECT
@@ -128,7 +128,7 @@ WHERE TF.IdTeam = @id_team_riferimento
   AND TF.IdUtente = @id_utente_riferimento
   AND TF.IdEdizione = @id_edizione
   AND PW.IdGranPremio = @id_gran_premio
-  AND W.DataFine <= CURRENT_DATE
+  AND W.Concluso = TRUE
   AND PW.PunteggioFantasy IS NOT NULL
 ORDER BY P.Cognome, P.Nome;
 
@@ -197,29 +197,39 @@ SELECT
 FROM PRESTAZIONE_WEEKEND AS PW
 JOIN PILOTA AS P
     ON P.IdPilota = PW.IdPilota
+JOIN WEEKEND_DI_GARA AS W
+    ON W.IdEdizione = PW.IdEdizione
+    AND W.IdGranPremio = PW.IdGranPremio
 WHERE PW.IdEdizione = @id_edizione
   AND PW.IdGranPremio = @id_gran_premio
+  AND W.Concluso = TRUE
 ORDER BY P.Cognome, P.Nome;
 
 
--- Elaborabilità - il weekend è terminato e ogni pilota attualmente iscritto
--- possiede una prestazione con punteggio non nullo.
--- La colonna Elaborabile deve valere 1 per il weekend del seed.
+-- A9 - Stato amministrativo e completezza delle prestazioni necessarie.
+-- Il weekend scelto dal seed deve essere concluso, con una prestazione per
+-- ogni pilota iscritto. Le posizioni possono essere NULL perché la policy
+-- attribuisce zero punti; i due flag, invece, sono dati usati dalla policy.
 SELECT
     W.IdEdizione,
     W.IdGranPremio,
     W.DataFine,
+    W.Concluso,
     COUNT(DISTINCT PI.IdPilota) AS PilotiIscritti,
     COUNT(DISTINCT CASE
-        WHEN PW.PunteggioFantasy IS NOT NULL THEN PI.IdPilota
-    END) AS PrestazioniCalcolate,
+        WHEN PW.Penalizzato IS NOT NULL
+         AND PW.RegistraGiroVeloce IS NOT NULL
+        THEN PI.IdPilota
+    END) AS PrestazioniComplete,
     (
-        W.DataFine <= CURRENT_DATE
+        W.Concluso = TRUE
         AND COUNT(DISTINCT PI.IdPilota) > 0
         AND COUNT(DISTINCT PI.IdPilota) = COUNT(DISTINCT CASE
-            WHEN PW.PunteggioFantasy IS NOT NULL THEN PI.IdPilota
+            WHEN PW.Penalizzato IS NOT NULL
+             AND PW.RegistraGiroVeloce IS NOT NULL
+            THEN PI.IdPilota
         END)
-    ) AS Elaborabile
+    ) AS ConclusioneCoerente
 FROM WEEKEND_DI_GARA AS W
 JOIN PILOTA_ISCRITTO AS PI
     ON PI.IdEdizione = W.IdEdizione
@@ -229,7 +239,7 @@ LEFT JOIN PRESTAZIONE_WEEKEND AS PW
     AND PW.IdPilota = PI.IdPilota
 WHERE W.IdEdizione = @id_edizione
   AND W.IdGranPremio = @id_gran_premio
-GROUP BY W.IdEdizione, W.IdGranPremio, W.DataFine;
+GROUP BY W.IdEdizione, W.IdGranPremio, W.DataFine, W.Concluso;
 
 
 -- O2 - Verifica del risultato di ciascun team nel weekend.
@@ -248,6 +258,10 @@ SELECT
         AND SUM(PW.PunteggioFantasy) = RT.PunteggioWeekend
     ) AS RisultatoCoerente
 FROM RISULTATO_TEAM AS RT
+JOIN WEEKEND_DI_GARA AS W
+    ON W.IdEdizione = RT.IdEdizione
+    AND W.IdGranPremio = RT.IdGranPremio
+    AND W.Concluso = TRUE
 JOIN TEAM_FANTASY AS TF
     ON TF.IdTeam = RT.IdTeam
     AND TF.IdEdizione = RT.IdEdizione
@@ -277,6 +291,13 @@ FROM TEAM_FANTASY AS TF
 LEFT JOIN RISULTATO_TEAM AS RT
     ON RT.IdTeam = TF.IdTeam
     AND RT.IdEdizione = TF.IdEdizione
+    AND EXISTS (
+        SELECT 1
+        FROM WEEKEND_DI_GARA AS W
+        WHERE W.IdEdizione = RT.IdEdizione
+          AND W.IdGranPremio = RT.IdGranPremio
+          AND W.Concluso = TRUE
+    )
 WHERE TF.IdEdizione = @id_edizione
 GROUP BY TF.IdTeam, TF.Nome, TF.PunteggioTotale
 ORDER BY TF.Nome;

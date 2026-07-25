@@ -12,7 +12,6 @@ import it.unibo.fantasyf1.model.GrandPrixOption;
 import it.unibo.fantasyf1.model.RaceWeekend;
 import it.unibo.fantasyf1.service.AdminService;
 import it.unibo.fantasyf1.service.PerformanceRequest;
-import it.unibo.fantasyf1.service.ProcessingOutcome;
 
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ObjectProperty;
@@ -55,7 +54,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * Dashboard JavaFX per A1-A8. Dipende esclusivamente dal service trusted.
+ * Dashboard JavaFX per A1-A9. Dipende esclusivamente dal service trusted.
  */
 public final class AdminDashboard {
 
@@ -66,6 +65,8 @@ public final class AdminDashboard {
     private final Runnable showModeSelection;
     private final BorderPane root = new BorderPane();
     private final BooleanProperty busy = new SimpleBooleanProperty();
+    private final BooleanProperty selectedWeekendConcluded =
+        new SimpleBooleanProperty();
 
     private final ComboBox<Edizione> editionCombo = new ComboBox<>();
     private final Button refreshButton = new Button("Aggiorna cataloghi");
@@ -137,11 +138,11 @@ public final class AdminDashboard {
     private final CheckBox fastestLapCheck = new CheckBox(
         "Il pilota ha registrato il giro veloce"
     );
-    private final Button recalculateButton =
-        new Button("Ricalcola weekend (O1-O3)");
+    private final Button concludeWeekendButton =
+        new Button("Convalida e concludi weekend");
     private final Button recordPerformanceButton =
         new Button("Registra / correggi prestazione");
-    private final Label processingOutcomeLabel = new Label(
+    private final Label weekendResultStatusLabel = new Label(
         "Nessuna prestazione registrata in questa sessione."
     );
 
@@ -259,6 +260,14 @@ public final class AdminDashboard {
             (observable, previous, selected) ->
                 updateGrandPrixModeControls(selected)
         );
+        performanceWeekendCombo.valueProperty().addListener(
+            (observable, previous, selected) -> {
+                selectedWeekendConcluded.set(
+                    selected != null && selected.concluded()
+                );
+                updatePerformanceWeekendState(selected);
+            }
+        );
         refreshButton.setOnAction(
             event -> refreshAll(selectedEditionId(), "Cataloghi aggiornati.")
         );
@@ -269,17 +278,30 @@ public final class AdminDashboard {
         tabs.disableProperty().bind(busy);
         editionCombo.disableProperty().bind(busy);
         refreshButton.disableProperty().bind(busy);
-        recalculateButton.disableProperty().bind(
+        concludeWeekendButton.disableProperty().bind(
             busy
                 .or(editionCombo.valueProperty().isNull())
                 .or(performanceWeekendCombo.valueProperty().isNull())
+                .or(selectedWeekendConcluded)
         );
         recordPerformanceButton.disableProperty().bind(
             busy
                 .or(editionCombo.valueProperty().isNull())
                 .or(performanceWeekendCombo.valueProperty().isNull())
                 .or(performanceDriverCombo.valueProperty().isNull())
+                .or(selectedWeekendConcluded)
         );
+        for (Node control : List.of(
+            performanceDriverCombo,
+            qualifyingPositionField,
+            racePositionField,
+            penalizedCheck,
+            fastestLapCheck
+        )) {
+            control.disableProperty().bind(
+                busy.or(selectedWeekendConcluded)
+            );
+        }
     }
 
     private void buildLayout() {
@@ -358,7 +380,7 @@ public final class AdminDashboard {
                 createDriverEnrollmentForm(),
                 true
             ),
-            createTab("A8 · Prestazione", createPerformanceForm(), true)
+            createTab("A8/A9 · Risultati", createPerformanceForm(), true)
         );
         setEditionScopedTabsEnabled(false);
         return tabs;
@@ -552,21 +574,22 @@ public final class AdminDashboard {
         addRow(form, 5, "Giro veloce", fastestLapCheck);
 
         recordPerformanceButton.setOnAction(event -> recordPerformance());
-        recalculateButton.setOnAction(event -> recalculateWeekend());
+        concludeWeekendButton.setOnAction(event -> concludeWeekend());
 
-        processingOutcomeLabel.setWrapText(true);
-        processingOutcomeLabel.setStyle(
+        weekendResultStatusLabel.setWrapText(true);
+        weekendResultStatusLabel.setStyle(
             "-fx-background-color: #f3f6f8; -fx-padding: 10px;"
         );
         final VBox actions = new VBox(
             10,
-            new HBox(10, recordPerformanceButton, recalculateButton),
-            processingOutcomeLabel
+            new HBox(10, recordPerformanceButton, concludeWeekendButton),
+            weekendResultStatusLabel
         );
         return formPage(
-            "A8 — Prestazione ufficiale e ricalcolo",
-            "L'upsert corregge una prestazione esistente ed esegue "
-                + "atomicamente O1-O3. Il ricalcolo manuale è idempotente.",
+            "A8/A9 — Risultati ufficiali e conclusione",
+            "A8 registra o corregge prestazioni finché il weekend è aperto. "
+                + "A9 convalida un set completo, conclude il weekend ed "
+                + "esegue atomicamente O1-O3.",
             form,
             actions
         );
@@ -891,17 +914,21 @@ public final class AdminDashboard {
             );
             executeMutation(
                 "registrazione-prestazione",
-                "Registrazione e ricalcolo della prestazione in corso…",
-                () -> admin.recordPerformance(request),
-                outcome -> {
-                    applyProcessingOutcome(outcome);
-                    confirm("Prestazione salvata e punteggi riallineati.");
+                "Registrazione della prestazione in corso…",
+                () -> {
+                    admin.recordPerformance(request);
+                    return Boolean.TRUE;
+                },
+                ignored -> {
+                    weekendResultStatusLabel.setText(
+                        "Prestazione salvata. Il punteggio fantasy resta "
+                            + "non calcolato fino alla conclusione A9."
+                    );
+                    confirm("Prestazione salvata correttamente.");
                     refreshAll(
                         edition.id(),
-                        outcome.weekendProcessable()
-                            ? "Weekend elaborabile: O1-O3 completate."
-                            : "Prestazione salvata; il weekend è ancora "
-                                + "incompleto o non terminato."
+                        "Prestazione salvata; il weekend è ancora "
+                            + "non concluso."
                     );
                 }
             );
@@ -910,7 +937,7 @@ public final class AdminDashboard {
         }
     }
 
-    private void recalculateWeekend() {
+    private void concludeWeekend() {
         try {
             final Edizione edition = requireSelection(
                 editionCombo,
@@ -921,26 +948,28 @@ public final class AdminDashboard {
                 "Seleziona un weekend."
             );
             executeMutation(
-                "ricalcolo-weekend",
-                "Ricalcolo idempotente del weekend in corso…",
-                () -> admin.processWeekend(
-                    edition.id(),
-                    weekend.grandPrixId()
-                ),
-                processable -> {
-                    processingOutcomeLabel.setText(
-                        processable
-                            ? "Weekend elaborabile: punteggi dei piloti, "
-                                + "risultati dei team e totali riallineati."
-                            : "Weekend non elaborabile: i risultati parziali "
-                                + "sono stati rimossi e i totali riallineati."
+                "conclusione-weekend",
+                "Convalida, conclusione e calcolo dei punteggi in corso…",
+                () -> {
+                    admin.concludeWeekend(
+                        edition.id(),
+                        weekend.grandPrixId()
                     );
-                    confirm("Ricalcolo concluso.");
+                    return Boolean.TRUE;
+                },
+                ignored -> {
+                    weekendResultStatusLabel.setText(
+                        "Weekend concluso e convalidato: O1, O2 e O3 "
+                            + "completate."
+                    );
+                    confirm(
+                        "Weekend concluso. I punteggi fantasy sono ora "
+                            + "disponibili."
+                    );
                     refreshAll(
                         edition.id(),
-                        processable
-                            ? "Ricalcolo O1-O3 completato."
-                            : "Ricalcolo completato: weekend non elaborabile."
+                        "Conclusione amministrativa e calcolo O1-O3 "
+                            + "completati."
                     );
                 }
             );
@@ -1130,12 +1159,33 @@ public final class AdminDashboard {
         selectFirstIfEmpty(performanceWeekendCombo);
     }
 
+    private void updatePerformanceWeekendState(
+        final RaceWeekend weekend
+    ) {
+        if (weekend == null) {
+            weekendResultStatusLabel.setText(
+                "Seleziona un weekend per registrarne o convalidarne "
+                    + "i risultati."
+            );
+        } else if (weekend.concluded()) {
+            weekendResultStatusLabel.setText(
+                "Weekend concluso: le prestazioni sono bloccate e i "
+                    + "punteggi fantasy sono definitivi."
+            );
+        } else {
+            weekendResultStatusLabel.setText(
+                "Weekend non concluso: puoi registrare le prestazioni. "
+                    + "I punteggi saranno calcolati soltanto con A9."
+            );
+        }
+    }
+
     private void applyEditionStatus(final EditionStatus status) {
         final Edizione edition = editionCombo.getValue();
         completionTitle.setText(
             status.complete()
-                ? edition + " — completa"
-                : edition + " — popolamento in corso"
+                ? edition + " — Completa"
+                : edition + " — Popolamento in corso"
         );
         completionDetail.setText(
             "%d/24 weekend · %d/10 scuderie · %d/20 piloti · "
@@ -1172,19 +1222,6 @@ public final class AdminDashboard {
             "Crea o seleziona un'edizione per visualizzarne lo stato."
         );
         completionProgress.setProgress(0);
-    }
-
-    private void applyProcessingOutcome(final ProcessingOutcome outcome) {
-        processingOutcomeLabel.setText(
-            "Punteggio fantasy calcolato: %d. %s".formatted(
-                outcome.driverFantasyPoints(),
-                outcome.weekendProcessable()
-                    ? "Il weekend è terminato e completo: O2 e O3 sono "
-                        + "state aggiornate."
-                    : "Il weekend non è ancora elaborabile; non sono "
-                        + "memorizzati risultati parziali."
-            )
-        );
     }
 
     private <T> void executeMutation(

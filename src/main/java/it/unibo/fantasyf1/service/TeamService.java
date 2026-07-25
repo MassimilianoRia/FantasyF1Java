@@ -14,8 +14,6 @@ import it.unibo.fantasyf1.session.SessionManager;
 import it.unibo.fantasyf1.session.UserSession;
 import it.unibo.fantasyf1.validation.InputValidator;
 
-import java.time.Clock;
-import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -33,22 +31,19 @@ public final class TeamService {
     private final AdminDao admin;
     private final ResultDao results;
     private final SessionManager sessions;
-    private final Clock clock;
 
     public TeamService(
         final TransactionManager transactions,
         final TeamDao teams,
         final AdminDao admin,
         final ResultDao results,
-        final SessionManager sessions,
-        final Clock clock
+        final SessionManager sessions
     ) {
         this.transactions = Objects.requireNonNull(transactions);
         this.teams = Objects.requireNonNull(teams);
         this.admin = Objects.requireNonNull(admin);
         this.results = Objects.requireNonNull(results);
         this.sessions = Objects.requireNonNull(sessions);
-        this.clock = Objects.requireNonNull(clock);
     }
 
     public List<DriverOption> selectableDrivers(final int editionId) {
@@ -110,22 +105,14 @@ public final class TeamService {
             );
             teams.insertComponents(connection, teamId, editionId, driverIds);
 
-            final LocalDate today = LocalDate.now(clock);
             for (int grandPrixId :
-                results.findEndedWeekendIds(connection, editionId, today)) {
-                if (results.isProcessable(
+                results.findConcludedWeekendIds(connection, editionId)) {
+                results.upsertResultForTeam(
                     connection,
+                    teamId,
                     editionId,
-                    grandPrixId,
-                    today
-                )) {
-                    results.upsertResultForTeam(
-                        connection,
-                        teamId,
-                        editionId,
-                        grandPrixId
-                    );
-                }
+                    grandPrixId
+                );
             }
             results.recalculateTeamTotal(connection, teamId);
             return teamId;
@@ -141,26 +128,11 @@ public final class TeamService {
         ));
     }
 
-    public List<RaceWeekend> processedWeekends(final int editionId) {
+    public List<RaceWeekend> weekends(final int editionId) {
         ServiceGuards.authenticated(sessions);
-        final LocalDate today = LocalDate.now(clock);
-        return transactions.query(connection -> {
-            final List<RaceWeekend> all =
-                admin.findWeekends(connection, editionId);
-            final java.util.ArrayList<RaceWeekend> processable =
-                new java.util.ArrayList<>();
-            for (RaceWeekend weekend : all) {
-                if (results.isProcessable(
-                    connection,
-                    editionId,
-                    weekend.grandPrixId(),
-                    today
-                )) {
-                    processable.add(weekend);
-                }
-            }
-            return List.copyOf(processable);
-        });
+        return transactions.query(
+            connection -> admin.findWeekends(connection, editionId)
+        );
     }
 
     public List<WeekendScoreRow> weekendBreakdown(
@@ -183,6 +155,19 @@ public final class TeamService {
                         + "all'edizione corrente."
                 );
             }
+            final boolean concluded = admin.findWeekendConclusion(
+                connection,
+                editionId,
+                grandPrixId
+            ).orElseThrow(() -> ServiceGuards.notFound(
+                "Weekend non trovato."
+            ));
+            if (!concluded) {
+                throw ServiceGuards.conflict(
+                    "I punteggi non sono ancora disponibili: il weekend "
+                        + "non è stato convalidato."
+                );
+            }
             final List<WeekendScoreRow> rows =
                 teams.findWeekendBreakdown(
                     connection,
@@ -193,8 +178,8 @@ public final class TeamService {
                 );
             if (rows.size() != TEAM_SIZE) {
                 throw ServiceGuards.conflict(
-                    "Il weekend non è ancora elaborato definitivamente "
-                        + "per questo team."
+                    "I punteggi definitivi non sono disponibili per questo "
+                        + "team."
                 );
             }
             return rows;

@@ -93,6 +93,9 @@ public final class TeamDao {
         JOIN RISULTATO_TEAM RT
           ON RT.IdTeam = TF.IdTeam
          AND RT.IdEdizione = TF.IdEdizione
+        JOIN WEEKEND_DI_GARA W
+          ON W.IdEdizione = RT.IdEdizione
+         AND W.IdGranPremio = RT.IdGranPremio
         JOIN COMPOSIZIONE_TEAM CT
           ON CT.IdTeam = TF.IdTeam
          AND CT.IdEdizione = TF.IdEdizione
@@ -108,6 +111,7 @@ public final class TeamDao {
           AND TF.IdUtente = ?
           AND TF.IdEdizione = ?
           AND RT.IdGranPremio = ?
+          AND W.Concluso = TRUE
           AND PW.PunteggioFantasy IS NOT NULL
         ORDER BY P.Cognome, P.Nome
         """;

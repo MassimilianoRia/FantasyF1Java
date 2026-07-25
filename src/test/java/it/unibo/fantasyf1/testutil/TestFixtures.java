@@ -141,6 +141,21 @@ public final class TestFixtures {
         );
     }
 
+    public void concludeWeekend(
+        final int editionId,
+        final int grandPrixId
+    ) {
+        database.update(
+            """
+            UPDATE WEEKEND_DI_GARA
+            SET Concluso = TRUE
+            WHERE IdEdizione = ? AND IdGranPremio = ?
+            """,
+            editionId,
+            grandPrixId
+        );
+    }
+
     public int team(
         final String name,
         final int totalPoints,

@@ -364,14 +364,16 @@ VALUES (
     '3476334034'
 );
 
--- Ventiquattro weekend per le edizioni concluse e ventidue per il 2025.
+-- Ventiquattro weekend conclusi per il 2021-2024. Nel 2025 i primi venti
+-- hanno risultati ufficiali convalidati e gli ultimi due restano aperti.
 -- Risalendo nel tempo la finestra si sposta di tre GP per stagione.
 INSERT INTO WEEKEND_DI_GARA (
     IdEdizione,
     IdGranPremio,
     NumeroRound,
     DataInizio,
-    DataFine
+    DataFine,
+    Concluso
 )
 SELECT
     E.IdEdizione,
@@ -384,7 +386,8 @@ SELECT
     DATE_ADD(
         STR_TO_DATE(CONCAT(E.Anno, '-03-01'), '%Y-%m-%d'),
         INTERVAL ((NUM.N - 1) * 12 + 2) DAY
-    )
+    ),
+    E.IdEdizione <> 5 OR NUM.N <= 20
 FROM EDIZIONE AS E
 JOIN _SEED_NUMERO AS NUM
     ON NUM.N <= CASE WHEN E.IdEdizione = 5 THEN 22 ELSE 24 END
@@ -754,7 +757,7 @@ FROM (
     FROM WEEKEND_DI_GARA AS W
     JOIN PILOTA_ISCRITTO AS PI
         ON PI.IdEdizione = W.IdEdizione
-    WHERE W.IdEdizione <> 5 OR W.NumeroRound <= 20
+    WHERE W.Concluso = TRUE
 ) AS DATI;
 
 -- Trecento partecipazioni per edizione (1500 totali):
@@ -802,6 +805,10 @@ FROM COMPOSIZIONE_TEAM AS CT
 JOIN PRESTAZIONE_WEEKEND AS PW
     ON PW.IdEdizione = CT.IdEdizione
     AND PW.IdPilota = CT.IdPilota
+JOIN WEEKEND_DI_GARA AS W
+    ON W.IdEdizione = PW.IdEdizione
+    AND W.IdGranPremio = PW.IdGranPremio
+    AND W.Concluso = TRUE
 GROUP BY
     CT.IdEdizione,
     PW.IdGranPremio,
@@ -813,11 +820,15 @@ HAVING COUNT(*) = 4
 UPDATE TEAM_FANTASY AS TF
 JOIN (
     SELECT
-        IdTeam,
-        IdEdizione,
-        SUM(PunteggioWeekend) AS Totale
-    FROM RISULTATO_TEAM
-    GROUP BY IdTeam, IdEdizione
+        RT.IdTeam,
+        RT.IdEdizione,
+        SUM(RT.PunteggioWeekend) AS Totale
+    FROM RISULTATO_TEAM AS RT
+    JOIN WEEKEND_DI_GARA AS W
+        ON W.IdEdizione = RT.IdEdizione
+        AND W.IdGranPremio = RT.IdGranPremio
+        AND W.Concluso = TRUE
+    GROUP BY RT.IdTeam, RT.IdEdizione
 ) AS RT
     ON RT.IdTeam = TF.IdTeam
     AND RT.IdEdizione = TF.IdEdizione
@@ -846,6 +857,8 @@ SELECT
     (SELECT COUNT(*) FROM SCUDERIA_ISCRITTA) AS ScuderieIscritte,
     (SELECT COUNT(*) FROM GRAN_PREMIO) AS GranPremi,
     (SELECT COUNT(*) FROM WEEKEND_DI_GARA) AS WeekendDiGara,
+    (SELECT COUNT(*) FROM WEEKEND_DI_GARA WHERE Concluso = TRUE)
+        AS WeekendConclusi,
     (SELECT COUNT(*) FROM UTENTE) AS Utenti,
     (SELECT COUNT(*) FROM TEAM_FANTASY) AS TeamFantasy,
     (SELECT COUNT(*) FROM LEGA) AS Leghe,
@@ -917,6 +930,23 @@ SELECT
     ) AS PunteggiPilotaIncoerenti,
     (
         SELECT COUNT(*)
+        FROM PRESTAZIONE_WEEKEND AS PW
+        JOIN WEEKEND_DI_GARA AS W
+            ON W.IdEdizione = PW.IdEdizione
+            AND W.IdGranPremio = PW.IdGranPremio
+        WHERE W.Concluso = FALSE
+          AND PW.PunteggioFantasy IS NOT NULL
+    ) AS PunteggiPrimaDellaConclusione,
+    (
+        SELECT COUNT(*)
+        FROM RISULTATO_TEAM AS RT
+        JOIN WEEKEND_DI_GARA AS W
+            ON W.IdEdizione = RT.IdEdizione
+            AND W.IdGranPremio = RT.IdGranPremio
+        WHERE W.Concluso = FALSE
+    ) AS RisultatiTeamDiWeekendNonConclusi,
+    (
+        SELECT COUNT(*)
         FROM RISULTATO_TEAM AS RT
         JOIN (
             SELECT
@@ -940,11 +970,15 @@ SELECT
         FROM TEAM_FANTASY AS TF
         JOIN (
             SELECT
-                IdTeam,
-                IdEdizione,
-                SUM(PunteggioWeekend) AS TotaleAtteso
-            FROM RISULTATO_TEAM
-            GROUP BY IdTeam, IdEdizione
+                RT.IdTeam,
+                RT.IdEdizione,
+                SUM(RT.PunteggioWeekend) AS TotaleAtteso
+            FROM RISULTATO_TEAM AS RT
+            JOIN WEEKEND_DI_GARA AS W
+                ON W.IdEdizione = RT.IdEdizione
+                AND W.IdGranPremio = RT.IdGranPremio
+                AND W.Concluso = TRUE
+            GROUP BY RT.IdTeam, RT.IdEdizione
         ) AS ATTESO
             ON ATTESO.IdTeam = TF.IdTeam
             AND ATTESO.IdEdizione = TF.IdEdizione

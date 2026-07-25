@@ -106,6 +106,19 @@ final class AdminCrudH2Test {
         assertEquals(1, admin.drivers().size());
         assertEquals(1, admin.enrolledDrivers(editionId).size());
         assertEquals(1, admin.weekends(editionId).size());
+        assertFalse(admin.weekends(editionId).getFirst().concluded());
+        assertEquals(
+            0,
+            database.queryInt(
+                """
+                SELECT COUNT(*) FROM WEEKEND_DI_GARA
+                WHERE IdEdizione = ? AND IdGranPremio = ?
+                  AND Concluso = TRUE
+                """,
+                editionId,
+                grandPrixId
+            )
+        );
         assertFalse(admin.editionStatus(editionId).complete());
         assertTrue(
             database.queryInt(

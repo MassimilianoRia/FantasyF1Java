@@ -35,6 +35,12 @@ Eseguire nell'ordine:
 1. `src/main/resources/db/schema.sql`
 2. `src/main/resources/db/seed.sql`
 
+Per conservare un database creato con la versione precedente, eseguire invece
+una sola volta `src/main/resources/db/migrate_concluso.sql`. La migrazione
+aggiunge `Concluso`, riconosce come conclusi soltanto i weekend legacy già
+completi e calcolati, elimina eventuali risultati provvisori e riallinea O3
+senza usare `DataFine`.
+
 `schema.sql` è intenzionalmente distruttivo: esegue
 `DROP DATABASE IF EXISTS fantasy_f1` e ricrea l'intero database. Va usato
 soltanto su un'istanza locale usa-e-getta, dopo aver verificato con attenzione
@@ -47,12 +53,11 @@ dati da conservare.
 201 leghe, 6008 componenti, 1501 partecipazioni, 2280 prestazioni e
 34840 risultati team.
 
-Le edizioni 2021-2024 sono complete con 24 weekend, 10 scuderie, 20 piloti,
-300 team e 40 leghe. Il 2025 resta intenzionalmente incompleto: contiene
-22 weekend, 9 scuderie, 18 piloti e prestazioni soltanto per i primi 20
-weekend. In questo modo A3, A5, A7 e A8 possono essere provate su dati
-parziali. Piloti, scuderie e Gran Premi ricorrono intenzionalmente in più
-stagioni, con avvicendamenti fra un'edizione e l'altra.
+Le edizioni 2021-2024 sono complete con 24 weekend conclusi, 10 scuderie,
+20 piloti, 300 team e 40 leghe. Il 2025 resta intenzionalmente incompleto:
+contiene 22 weekend, 9 scuderie, 18 piloti e prestazioni/punteggi soltanto per
+i primi 20 weekend, marcati conclusi. Gli ultimi due sono non conclusi e senza
+risultati, così A8 e A9 possono essere provate su dati coerenti.
 
 `reset.sql` svuota tutte le 14 tabelle tramite `TRUNCATE` e azzera gli
 `AUTO_INCREMENT`. Anche questo script è distruttivo: `TRUNCATE` produce commit
@@ -61,7 +66,7 @@ sul database di sviluppo se non è stato prima dimostrato che i dati siano
 eliminabili.
 
 `test.sql` è invece non distruttivo. Dopo il seed esegue soltanto `SET` e
-`SELECT` per mostrare U3, U5, U7, U8, U9 e verificare elaborabilità, O1, O2,
+`SELECT` per mostrare U3, U5, U7, U8, U9 e verificare lo stato A9, O1, O2,
 O3 e le principali invarianti dei dati dimostrativi.
 
 Gli script di produzione sono specifici per MySQL e non devono essere eseguiti
@@ -117,26 +122,29 @@ penalizzazione   = -5
 punteggio        = punti gara + punti qualifica + bonus - malus
 ```
 
-Una posizione nulla vale zero; un booleano nullo viene trattato come `false`.
+Una posizione nulla vale zero. I flag `Penalizzato` e
+`RegistraGiroVeloce`, usati direttamente dalla policy, devono essere presenti
+prima della convalida A9.
 Il seed applica questa formula a tutte le 2280 prestazioni, calcola i 34840
 risultati dei team come somma dei rispettivi quattro piloti e riallinea
 `PunteggioTotale`. La policy è una scelta applicativa dimostrativa e non viene
 presentata come formula prescritta dalla relazione.
 
-## Weekend terminato ed elaborabile
+## Conclusione amministrativa del weekend
 
-Un weekend è considerato elaborabile quando:
+`Concluso` è uno stato amministrativo esplicito e non deriva mai da
+`DataFine`. Un weekend appena creato è non concluso.
 
-1. `DataFine` non è successiva alla data locale corrente;
-2. esiste una prestazione per ogni pilota attualmente iscritto all'edizione;
-3. ogni prestazione ha un `PunteggioFantasy` non nullo.
+A8 consente di inserire o correggere le prestazioni soltanto mentre il weekend
+è aperto e lascia sempre `PunteggioFantasy` a `NULL`. A9 blocca il weekend,
+verifica che esista una prestazione completa per ogni pilota iscritto, imposta
+`Concluso = TRUE` e, nella stessa transazione, esegue O1, O2 e O3. Un errore
+annulla l'intera operazione, incluso il cambio di stato.
 
-Il popolamento amministrativo resta progressivo. Finché le condizioni non sono
-soddisfatte non vengono creati risultati parziali in `RISULTATO_TEAM`. Quando
-il weekend diventa elaborabile, O2 memorizza la somma solo per i team completi
-di quattro piloti con quattro punteggi; O3 riallinea
-`TEAM_FANTASY.PunteggioTotale` alla somma dei risultati memorizzati. La
-correzione di una prestazione riesegue a cascata O1-O3.
+O1 e O2 includono un controllo SQL su `Concluso = TRUE`; O3 somma
+esclusivamente `RISULTATO_TEAM` collegati a weekend conclusi. U8 applica lo
+stesso filtro e l'interfaccia utente presenta i punteggi come disponibili solo
+dopo A9. Non è prevista un'operazione di riapertura.
 
 L'edizione selezionata inizialmente è quella con l'anno più recente. L'utente
 può cambiarla per consultare o provare anche le edizioni storiche.

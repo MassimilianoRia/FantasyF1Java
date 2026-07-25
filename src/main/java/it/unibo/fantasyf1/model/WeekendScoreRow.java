@@ -1,7 +1,7 @@
 package it.unibo.fantasyf1.model;
 
 /**
- * Dettaglio U8 del punteggio di un pilota in un weekend elaborato.
+ * Dettaglio U8 del punteggio di un pilota in un weekend concluso.
  */
 public record WeekendScoreRow(
     int driverId,

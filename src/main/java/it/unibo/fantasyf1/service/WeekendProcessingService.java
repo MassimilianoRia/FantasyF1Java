@@ -7,12 +7,10 @@ import it.unibo.fantasyf1.scoring.PerformanceData;
 import it.unibo.fantasyf1.scoring.ScoringPolicy;
 import it.unibo.fantasyf1.validation.InputValidator;
 
-import java.time.Clock;
-import java.time.LocalDate;
 import java.util.Objects;
 
 /**
- * Workflow atomico e idempotente A8 → O1 → O2 → O3.
+ * Workflow atomici A8 e A9 → O1 → O2 → O3.
  */
 public final class WeekendProcessingService {
 
@@ -20,23 +18,20 @@ public final class WeekendProcessingService {
     private final AdminDao admin;
     private final ResultDao results;
     private final ScoringPolicy scoringPolicy;
-    private final Clock clock;
 
     public WeekendProcessingService(
         final TransactionManager transactions,
         final AdminDao admin,
         final ResultDao results,
-        final ScoringPolicy scoringPolicy,
-        final Clock clock
+        final ScoringPolicy scoringPolicy
     ) {
         this.transactions = Objects.requireNonNull(transactions);
         this.admin = Objects.requireNonNull(admin);
         this.results = Objects.requireNonNull(results);
         this.scoringPolicy = Objects.requireNonNull(scoringPolicy);
-        this.clock = Objects.requireNonNull(clock);
     }
 
-    public ProcessingOutcome recordPerformance(
+    public void recordPerformance(
         final PerformanceRequest request
     ) {
         Objects.requireNonNull(request, "La prestazione non può essere null");
@@ -61,9 +56,22 @@ public final class WeekendProcessingService {
             request.penalized(),
             request.fastestLap()
         );
-        return transactions.inTransaction(connection -> {
+        transactions.inTransaction(connection -> {
             if (!admin.lockEdition(connection, request.editionId())) {
                 throw ServiceGuards.notFound("Edizione non trovata.");
+            }
+            final boolean concluded = admin.lockWeekendConclusion(
+                connection,
+                request.editionId(),
+                request.grandPrixId()
+            ).orElseThrow(() -> ServiceGuards.notFound(
+                "Weekend non trovato."
+            ));
+            if (concluded) {
+                throw ServiceGuards.conflict(
+                    "Il weekend è già concluso: le prestazioni ufficiali "
+                        + "non possono più essere modificate."
+                );
             }
             if (!admin.performanceContextExists(
                 connection,
@@ -77,45 +85,31 @@ public final class WeekendProcessingService {
                 );
             }
 
-            final int requestedScore = scoringPolicy.score(data);
             admin.upsertPerformance(
                 connection,
                 request.editionId(),
                 request.grandPrixId(),
                 request.driverId(),
-                data,
-                requestedScore
+                data
             );
-
-            // O1 viene rieseguita su tutte le prestazioni del weekend:
-            // l'operazione è idempotente e rende sostituibile la policy.
-            for (ResultDao.PerformanceRow row : results.findPerformances(
-                connection,
-                request.editionId(),
-                request.grandPrixId()
-            )) {
-                results.updateFantasyScore(
-                    connection,
-                    request.editionId(),
-                    request.grandPrixId(),
-                    row.driverId(),
-                    scoringPolicy.score(row.data())
-                );
-            }
-
-            final boolean processable = updateDerivedData(
+            // A8 mantiene il punteggio non calcolato. La pulizia protegge
+            // anche database legacy che contenevano risultati provvisori.
+            results.clearWeekendResults(
                 connection,
                 request.editionId(),
                 request.grandPrixId()
             );
-            return new ProcessingOutcome(requestedScore, processable);
+            results.recalculateEditionTotals(
+                connection,
+                request.editionId()
+            );
         });
     }
 
     /**
-     * Comando amministrativo idempotente per riallineare un weekend.
+     * A9 convalida i risultati e, nella stessa transazione, esegue O1-O3.
      */
-    public boolean processWeekend(
+    public void concludeWeekend(
         final int editionId,
         final int grandPrixId
     ) {
@@ -124,13 +118,57 @@ public final class WeekendProcessingService {
                 "Seleziona un'edizione e un weekend validi."
             );
         }
-        return transactions.inTransaction(connection -> {
+        transactions.inTransaction(connection -> {
             if (!admin.lockEdition(connection, editionId)) {
                 throw ServiceGuards.notFound("Edizione non trovata.");
             }
-            if (!admin.weekendExists(connection, editionId, grandPrixId)) {
-                throw ServiceGuards.notFound("Weekend non trovato.");
+            final boolean concluded = admin.lockWeekendConclusion(
+                connection,
+                editionId,
+                grandPrixId
+            ).orElseThrow(() -> ServiceGuards.notFound(
+                "Weekend non trovato."
+            ));
+            if (concluded) {
+                throw ServiceGuards.conflict(
+                    "Il weekend è già stato concluso."
+                );
             }
+
+            final ResultDao.CompletionStatus completion =
+                results.completionStatus(
+                    connection,
+                    editionId,
+                    grandPrixId
+                );
+            if (completion.enrolledDrivers() == 0) {
+                throw ServiceGuards.conflict(
+                    "Non è possibile concludere il weekend: l'edizione "
+                        + "non contiene piloti iscritti."
+                );
+            }
+            if (!completion.ready()) {
+                throw ServiceGuards.conflict(
+                    "Non è possibile concludere il weekend: mancano "
+                        + completion.missingPerformances()
+                        + " prestazioni ufficiali su "
+                        + completion.enrolledDrivers() + "."
+                );
+            }
+
+            if (admin.concludeWeekend(
+                connection,
+                editionId,
+                grandPrixId
+            ) != 1) {
+                throw ServiceGuards.conflict(
+                    "Il weekend non è stato concluso perché il suo stato "
+                        + "è cambiato."
+                );
+            }
+
+            // O1 è ammessa soltanto dopo l'UPDATE amministrativo. Qualsiasi
+            // errore annulla anche Concluso grazie alla transazione comune.
             for (ResultDao.PerformanceRow row :
                 results.findPerformances(connection, editionId, grandPrixId)) {
                 results.updateFantasyScore(
@@ -141,38 +179,13 @@ public final class WeekendProcessingService {
                     scoringPolicy.score(row.data())
                 );
             }
-            return updateDerivedData(connection, editionId, grandPrixId);
-        });
-    }
-
-    private boolean updateDerivedData(
-        final java.sql.Connection connection,
-        final int editionId,
-        final int grandPrixId
-    ) throws java.sql.SQLException {
-        final boolean processable = results.isProcessable(
-            connection,
-            editionId,
-            grandPrixId,
-            LocalDate.now(clock)
-        );
-        if (processable) {
             results.recalculateWeekendResults(
                 connection,
                 editionId,
                 grandPrixId
             );
-        } else {
-            // Una correzione o un nuovo iscritto non devono lasciare un
-            // risultato precedentemente definitivo ma ora incompleto.
-            results.clearWeekendResults(
-                connection,
-                editionId,
-                grandPrixId
-            );
-        }
-        results.recalculateEditionTotals(connection, editionId);
-        return processable;
+            results.recalculateEditionTotals(connection, editionId);
+        });
     }
 
     private static void validatePosition(

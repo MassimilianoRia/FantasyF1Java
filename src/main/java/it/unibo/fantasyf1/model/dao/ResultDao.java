@@ -3,11 +3,9 @@ package it.unibo.fantasyf1.model.dao;
 import it.unibo.fantasyf1.scoring.PerformanceData;
 
 import java.sql.Connection;
-import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,9 +21,14 @@ public final class ResultDao {
             PosizionamentoGara,
             Penalizzato,
             RegistraGiroVeloce
-        FROM PRESTAZIONE_WEEKEND
-        WHERE IdEdizione = ? AND IdGranPremio = ?
-        ORDER BY IdPilota
+        FROM PRESTAZIONE_WEEKEND PW
+        JOIN WEEKEND_DI_GARA W
+          ON W.IdEdizione = PW.IdEdizione
+         AND W.IdGranPremio = PW.IdGranPremio
+        WHERE PW.IdEdizione = ?
+          AND PW.IdGranPremio = ?
+          AND W.Concluso = TRUE
+        ORDER BY PW.IdPilota
         """;
 
     private static final String UPDATE_SCORE = """
@@ -34,19 +37,29 @@ public final class ResultDao {
         WHERE IdEdizione = ?
           AND IdGranPremio = ?
           AND IdPilota = ?
+          AND EXISTS (
+              SELECT 1
+              FROM WEEKEND_DI_GARA W
+              WHERE W.IdEdizione = PRESTAZIONE_WEEKEND.IdEdizione
+                AND W.IdGranPremio = PRESTAZIONE_WEEKEND.IdGranPremio
+                AND W.Concluso = TRUE
+          )
         """;
 
-    private static final String PROCESSABILITY = """
+    private static final String COMPLETION_STATUS = """
         SELECT
-            W.DataFine,
             (SELECT COUNT(*)
              FROM PILOTA_ISCRITTO PI
              WHERE PI.IdEdizione = W.IdEdizione) AS PilotiIscritti,
             (SELECT COUNT(*)
              FROM PRESTAZIONE_WEEKEND PW
+             JOIN PILOTA_ISCRITTO PI
+               ON PI.IdEdizione = PW.IdEdizione
+              AND PI.IdPilota = PW.IdPilota
              WHERE PW.IdEdizione = W.IdEdizione
                AND PW.IdGranPremio = W.IdGranPremio
-               AND PW.PunteggioFantasy IS NOT NULL) AS PunteggiCompleti
+               AND PW.Penalizzato IS NOT NULL
+               AND PW.RegistraGiroVeloce IS NOT NULL) AS PrestazioniComplete
         FROM WEEKEND_DI_GARA W
         WHERE W.IdEdizione = ? AND W.IdGranPremio = ?
         """;
@@ -65,6 +78,10 @@ public final class ResultDao {
             CT.IdTeam,
             SUM(PW.PunteggioFantasy)
         FROM COMPOSIZIONE_TEAM CT
+        JOIN WEEKEND_DI_GARA W
+          ON W.IdEdizione = CT.IdEdizione
+         AND W.IdGranPremio = ?
+         AND W.Concluso = TRUE
         JOIN PRESTAZIONE_WEEKEND PW
           ON PW.IdEdizione = CT.IdEdizione
          AND PW.IdPilota = CT.IdPilota
@@ -82,8 +99,12 @@ public final class ResultDao {
         SET TF.PunteggioTotale = COALESCE((
             SELECT SUM(RT.PunteggioWeekend)
             FROM RISULTATO_TEAM RT
+            JOIN WEEKEND_DI_GARA W
+              ON W.IdEdizione = RT.IdEdizione
+             AND W.IdGranPremio = RT.IdGranPremio
             WHERE RT.IdTeam = TF.IdTeam
               AND RT.IdEdizione = TF.IdEdizione
+              AND W.Concluso = TRUE
         ), 0)
         WHERE TF.IdEdizione = ?
         """;
@@ -93,16 +114,20 @@ public final class ResultDao {
         SET TF.PunteggioTotale = COALESCE((
             SELECT SUM(RT.PunteggioWeekend)
             FROM RISULTATO_TEAM RT
+            JOIN WEEKEND_DI_GARA W
+              ON W.IdEdizione = RT.IdEdizione
+             AND W.IdGranPremio = RT.IdGranPremio
             WHERE RT.IdTeam = TF.IdTeam
               AND RT.IdEdizione = TF.IdEdizione
+              AND W.Concluso = TRUE
         ), 0)
         WHERE TF.IdTeam = ?
         """;
 
-    private static final String FIND_ENDED_WEEKENDS = """
+    private static final String FIND_CONCLUDED_WEEKENDS = """
         SELECT IdGranPremio
         FROM WEEKEND_DI_GARA
-        WHERE IdEdizione = ? AND DataFine <= ?
+        WHERE IdEdizione = ? AND Concluso = TRUE
         ORDER BY NumeroRound
         """;
 
@@ -115,6 +140,10 @@ public final class ResultDao {
             CT.IdTeam,
             SUM(PW.PunteggioFantasy)
         FROM COMPOSIZIONE_TEAM CT
+        JOIN WEEKEND_DI_GARA W
+          ON W.IdEdizione = CT.IdEdizione
+         AND W.IdGranPremio = ?
+         AND W.Concluso = TRUE
         JOIN PRESTAZIONE_WEEKEND PW
           ON PW.IdEdizione = CT.IdEdizione
          AND PW.IdPilota = CT.IdPilota
@@ -178,32 +207,23 @@ public final class ResultDao {
         }
     }
 
-    /**
-     * Un weekend è elaborabile quando è terminato e ogni pilota attualmente
-     * iscritto all'edizione possiede un punteggio calcolato. Questa semantica
-     * consente il popolamento progressivo senza creare risultati parziali.
-     */
-    public boolean isProcessable(
+    public CompletionStatus completionStatus(
         final Connection connection,
         final int editionId,
-        final int grandPrixId,
-        final LocalDate today
+        final int grandPrixId
     ) throws SQLException {
         try (PreparedStatement statement =
-                 connection.prepareStatement(PROCESSABILITY)) {
+                 connection.prepareStatement(COMPLETION_STATUS)) {
             statement.setInt(1, editionId);
             statement.setInt(2, grandPrixId);
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next()) {
-                    return false;
+                    return new CompletionStatus(0, 0);
                 }
-                final LocalDate endDate =
-                    result.getDate("DataFine").toLocalDate();
-                final int enrolled = result.getInt("PilotiIscritti");
-                final int scored = result.getInt("PunteggiCompleti");
-                return !endDate.isAfter(today)
-                    && enrolled > 0
-                    && enrolled == scored;
+                return new CompletionStatus(
+                    result.getInt("PilotiIscritti"),
+                    result.getInt("PrestazioniComplete")
+                );
             }
         }
     }
@@ -223,7 +243,8 @@ public final class ResultDao {
                  connection.prepareStatement(UPSERT_WEEKEND_RESULTS)) {
             insert.setInt(1, grandPrixId);
             insert.setInt(2, grandPrixId);
-            insert.setInt(3, editionId);
+            insert.setInt(3, grandPrixId);
+            insert.setInt(4, editionId);
             insert.executeUpdate();
         }
     }
@@ -265,16 +286,14 @@ public final class ResultDao {
         }
     }
 
-    public List<Integer> findEndedWeekendIds(
+    public List<Integer> findConcludedWeekendIds(
         final Connection connection,
-        final int editionId,
-        final LocalDate today
+        final int editionId
     ) throws SQLException {
         final List<Integer> ids = new ArrayList<>();
         try (PreparedStatement statement =
-                 connection.prepareStatement(FIND_ENDED_WEEKENDS)) {
+                 connection.prepareStatement(FIND_CONCLUDED_WEEKENDS)) {
             statement.setInt(1, editionId);
-            statement.setDate(2, Date.valueOf(today));
             try (ResultSet result = statement.executeQuery()) {
                 while (result.next()) {
                     ids.add(result.getInt("IdGranPremio"));
@@ -302,12 +321,28 @@ public final class ResultDao {
                  connection.prepareStatement(UPSERT_SINGLE_TEAM_RESULT)) {
             statement.setInt(1, grandPrixId);
             statement.setInt(2, grandPrixId);
-            statement.setInt(3, teamId);
-            statement.setInt(4, editionId);
+            statement.setInt(3, grandPrixId);
+            statement.setInt(4, teamId);
+            statement.setInt(5, editionId);
             statement.executeUpdate();
         }
     }
 
     public record PerformanceRow(int driverId, PerformanceData data) {
+    }
+
+    public record CompletionStatus(
+        int enrolledDrivers,
+        int completedPerformances
+    ) {
+
+        public boolean ready() {
+            return enrolledDrivers > 0
+                && enrolledDrivers == completedPerformances;
+        }
+
+        public int missingPerformances() {
+            return Math.max(0, enrolledDrivers - completedPerformances);
+        }
     }
 }

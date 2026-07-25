@@ -59,8 +59,7 @@ public final class ApplicationServices {
             teamDao,
             adminDao,
             resultDao,
-            sessions,
-            selectedClock
+            sessions
         );
         leagues = new LeagueService(
             transactions,
@@ -73,15 +72,13 @@ public final class ApplicationServices {
                 transactions,
                 adminDao,
                 resultDao,
-                Objects.requireNonNull(scoringPolicy),
-                selectedClock
+                Objects.requireNonNull(scoringPolicy)
             );
         admin = new AdminService(
             transactions,
             adminDao,
             editionDao,
             teamDao,
-            resultDao,
             processing,
             selectedClock
         );

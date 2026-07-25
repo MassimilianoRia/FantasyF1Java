@@ -59,6 +59,9 @@ final class TeamTabView {
     private final ComboBox<RaceWeekend> scoreWeekend = new ComboBox<>();
     private final ListView<WeekendScoreRow> scoreRows = new ListView<>();
     private final Button loadScores = new Button("Mostra punteggi");
+    private final Label scoreAvailability = new Label(
+        "Seleziona un weekend."
+    );
 
     private Edizione edition;
     private long generation;
@@ -107,7 +110,7 @@ final class TeamTabView {
             new Label("Nessun pilota iscritto all'edizione")
         );
         scoreRows.setPlaceholder(
-            new Label("Seleziona team e weekend elaborato")
+            new Label("Seleziona team e weekend concluso")
         );
 
         UserViewSupport.renderList(
@@ -163,7 +166,10 @@ final class TeamTabView {
             (observable, previous, current) -> updateScoreAvailability()
         );
         scoreWeekend.valueProperty().addListener(
-            (observable, previous, current) -> updateScoreAvailability()
+            (observable, previous, current) -> {
+                scoreRows.getItems().clear();
+                updateScoreAvailability();
+            }
         );
 
         createTeam.setOnAction(event -> createTeam());
@@ -219,7 +225,7 @@ final class TeamTabView {
 
     private Node createScores() {
         scoreTeam.setPromptText("Team");
-        scoreWeekend.setPromptText("Weekend terminato");
+        scoreWeekend.setPromptText("Weekend");
         scoreTeam.setPrefWidth(280);
         scoreWeekend.setPrefWidth(360);
         final HBox filters = new HBox(
@@ -233,9 +239,10 @@ final class TeamTabView {
         final VBox content = new VBox(
             10,
             new Label(
-                "Dettaglio dei quattro punteggi fantasy del team."
+                "Dettaglio dei quattro punteggi fantasy definitivi del team."
             ),
             filters,
+            scoreAvailability,
             scoreRows
         );
         VBox.setVgrow(scoreRows, Priority.ALWAYS);
@@ -254,7 +261,7 @@ final class TeamTabView {
             () -> new TeamData(
                 services.teams().selectableDrivers(requestedEdition.id()),
                 services.teams().myTeams(requestedEdition.id()),
-                services.teams().processedWeekends(requestedEdition.id())
+                services.teams().weekends(requestedEdition.id())
             ),
             data -> {
                 if (!isCurrent(requestedEdition, requestedGeneration)) {
@@ -433,10 +440,24 @@ final class TeamTabView {
     }
 
     private void updateScoreAvailability() {
+        final RaceWeekend weekend = scoreWeekend.getValue();
+        if (weekend == null) {
+            scoreAvailability.setText("Seleziona un weekend.");
+        } else if (weekend.concluded()) {
+            scoreAvailability.setText(
+                "Weekend convalidato: i punteggi definitivi sono disponibili."
+            );
+        } else {
+            scoreAvailability.setText(
+                "Weekend non ancora convalidato: i punteggi non sono "
+                    + "disponibili."
+            );
+        }
         loadScores.setDisable(
             edition == null
                 || scoreTeam.getValue() == null
-                || scoreWeekend.getValue() == null
+                || weekend == null
+                || !weekend.concluded()
         );
     }
 
