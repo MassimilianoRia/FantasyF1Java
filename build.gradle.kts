@@ -35,6 +35,18 @@ application {
     mainClass.set("it.unibo.fantasyf1.App")
 }
 
+tasks.jar {
+    manifest {
+        attributes["Main-Class"] = application.mainClass.get()
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from({
+        configurations.runtimeClasspath.get().map {
+            if (it.isDirectory) it else zipTree(it)
+        }
+    })
+}
+
 tasks.register<JavaExec>("checkDatabaseConnection") {
     group = "verification"
     description = "Verifica la connessione JDBC al database fantasy_f1"
